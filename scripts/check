@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+for suite in WorkspaceChecks LayoutChecks JournalChecks DecisionsChecks chain-sim; do
+    sh scripts/swiftpm run "$@" "$suite"
+done
+if [ "$(uname -s)" = Darwin ]; then
+    sh scripts/swiftpm run "$@" NativeMetadataChecks
+fi

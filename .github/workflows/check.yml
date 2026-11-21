@@ -1,0 +1,14 @@
+name: Headless checks
+on: [push, pull_request]
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh scripts/check
+  compile-app:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh scripts/bundle

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>app.paperchain.mac</string>
+    <key>CFBundleName</key><string>Paper Chain</string>
+    <key>CFBundleExecutable</key><string>PaperChain</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleVersion</key><string>8</string>
+    <key>CFBundleShortVersionString</key><string>1.1.0</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSUIElement</key><true/>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>127.0.0.1</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key><true/>
+            </dict>
+        </dict>
+    </dict>
+    <key>NSAccessibilityUsageDescription</key><string>Paper Chain arranges windows on the displays you enable.</string>
+</dict>
+</plist>

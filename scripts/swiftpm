@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+# Some standalone Apple CLT upgrades retain the Swift 5.10 private manifest
+# interface alongside the Swift 6.1 library, plus a second SwiftBridging map.
+# Shadow only those stale files in the compiler's view for this build.
+if [ "$(uname -s)" = Darwin ] && [ "$(xcode-select -p)" = /Library/Developer/CommandLineTools ]; then
+    tools=/Library/Developer/CommandLineTools/usr
+    headers="$tools/include/swift"
+    modules="$tools/lib/swift/pm/ManifestAPI/PackageDescription.swiftmodule"
+    arch=$(uname -m)
+    obsolete="$modules/$arch-apple-macos.private.swiftinterface"
+    current="$modules/$arch-apple-macos.swiftinterface"
+    if grep -qs 'Apple Swift version 5.10 ' "$obsolete" &&
+       grep -qs 'Apple Swift version 6.1' "$current" &&
+       grep -qs 'module SwiftBridging' "$headers/module.modulemap" &&
+       grep -qs 'module SwiftBridging' "$headers/bridging.modulemap"; then
+        cache="$PWD/.build/clt-compat"
+        mkdir -p "$cache/modules"
+        if [ ! -f "$cache/empty.modulemap" ]; then touch "$cache/empty.modulemap"; fi
+        python3 - "$cache" "$headers/module.modulemap" "$obsolete" "$current" <<'PY'
+import json, pathlib, sys
+folder, duplicate, obsolete, current = sys.argv[1:]
+root = pathlib.Path(folder)
+mapping = {"version": 0, "roots": [
+    {"type": "file", "name": duplicate, "external-contents": str(root / "empty.modulemap")},
+    {"type": "file", "name": obsolete, "external-contents": current},
+]}
+overlay = root / "overlay.json"
+data = json.dumps(mapping)
+if not overlay.exists() or overlay.read_text() != data:
+    overlay.write_text(data)
+PY
+        action=$1
+        shift
+        export SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-$cache/modules}"
+        export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-$cache/modules}"
+        exec swift "$action" -Xbuild-tools-swiftc -vfsoverlay -Xbuild-tools-swiftc "$cache/overlay.json" \
+            -Xswiftc -vfsoverlay -Xswiftc "$cache/overlay.json" "$@"
+    fi
+fi
+exec swift "$@"
