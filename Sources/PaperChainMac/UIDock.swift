@@ -141,7 +141,7 @@ struct DockContent<A: PaperActions>: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .help("Allow Paper Chain to discover and arrange windows.")
+                        .help("Allow PaperChain to discover and arrange windows.")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if let group = screen.activeGroup {
                         windowList(group)

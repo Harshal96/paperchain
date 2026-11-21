@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="900" height="456" viewBox="0 0 900 456" role="img"
+     aria-labelledby="strip-title strip-description">
+  <title id="strip-title">Moving through a PaperChain window strip</title>
+  <desc id="strip-description">A monitor shows part of a horizontal chain of five pastel windows.
+    A frame in the overview marks exactly what fits on screen. The first two windows share the
+    screen. The periwinkle window slides to the center and its two visible neighbors dim, then
+    brighten. The mint window moves below the periwinkle one to form a stack. The last two
+    windows share the screen at the other end. With reduced motion, the centered stack stays still.</desc>
+
+  <defs>
+    <linearGradient id="stage" x2="0.8" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#fbfaf7"/>
+      <stop offset="1" stop-color="#f4f5f3"/>
+    </linearGradient>
+    <linearGradient id="apricot" x2=".8" y2="1">
+      <stop stop-color="#ffe6d8"/><stop offset="1" stop-color="#f0c8b6"/>
+    </linearGradient>
+    <linearGradient id="periwinkle" x2=".8" y2="1">
+      <stop stop-color="#e1e5ff"/><stop offset="1" stop-color="#bfc9f0"/>
+    </linearGradient>
+    <linearGradient id="mint" x2=".8" y2="1">
+      <stop stop-color="#ddf2e9"/><stop offset="1" stop-color="#b6dace"/>
+    </linearGradient>
+    <linearGradient id="butter" x2=".8" y2="1">
+      <stop stop-color="#fff1c8"/><stop offset="1" stop-color="#eedaa5"/>
+    </linearGradient>
+    <linearGradient id="rose" x2=".8" y2="1">
+      <stop stop-color="#fbe4ed"/><stop offset="1" stop-color="#e9c6d4"/>
+    </linearGradient>
+    <linearGradient id="bezel" x2=".3" y2="1">
+      <stop stop-color="#667581"/><stop offset=".45" stop-color="#35424e"/>
+      <stop offset=".94" stop-color="#36434e"/><stop offset="1" stop-color="#596771"/>
+    </linearGradient>
+    <linearGradient id="stem" x2="0" y2="1">
+      <stop stop-color="#87929b"/><stop offset=".45" stop-color="#b8bfc3"/>
+      <stop offset=".86" stop-color="#d3d7d7"/><stop offset="1" stop-color="#a7b1b6"/>
+    </linearGradient>
+    <linearGradient id="foot" x2="0" y2="1">
+      <stop stop-color="#e1e3e2"/><stop offset=".5" stop-color="#cbd0d1"/>
+      <stop offset="1" stop-color="#9ba6ae"/>
+    </linearGradient>
+    <radialGradient id="shadow">
+      <stop stop-color="#44515c" stop-opacity=".2"/><stop offset="1" stop-color="#44515c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="edge-fade">
+      <stop stop-color="white" stop-opacity="0"/>
+      <stop offset=".13" stop-color="white" stop-opacity=".66"/>
+      <stop offset=".28" stop-color="white"/><stop offset=".72" stop-color="white"/>
+      <stop offset=".87" stop-color="white" stop-opacity=".66"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="outside"><rect x="16" y="75" width="868" height="196" fill="url(#edge-fade)"/></mask>
+    <clipPath id="screen"><rect width="400" height="192" rx="6"/></clipPath>
+
+    <!-- All three views share these five windows. Two columns and their gap span 400 units. -->
+    <rect id="window" x=".5" y=".5" width="195" height="191" rx="8"
+          stroke="#455366" stroke-opacity=".22"/>
+    <g id="windows">
+      <use xlink:href="#window" fill="url(#apricot)"/>
+      <g transform="translate(204)">
+        <g class="stack-top" transform="scale(1 .479167)">
+          <use xlink:href="#window" fill="url(#periwinkle)"/>
+        </g>
+      </g>
+      <g transform="translate(408)">
+        <g class="stack-bottom" transform="translate(-204 100) scale(1 .479167)">
+          <use xlink:href="#window" fill="url(#mint)"/>
+        </g>
+      </g>
+      <g class="tail" transform="translate(-204)">
+        <use xlink:href="#window" x="612" fill="url(#butter)"/>
+        <use xlink:href="#window" x="816" fill="url(#rose)"/>
+      </g>
+    </g>
+  </defs>
+
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #34424c; }
+    .phase { font-size: 27px; font-weight: 600; letter-spacing: -.8px; text-anchor: middle; }
+    /* The artwork's SVG attributes describe the still frame. Animate only by preference. */
+    @media (prefers-reduced-motion: no-preference) {
+      .camera, .viewport, .stack-top, .stack-bottom, .tail, .overview, .dim, .phase {
+        animation-duration: 20s;
+        animation-timing-function: cubic-bezier(.42, 0, .22, 1);
+        animation-iteration-count: infinite;
+      }
+      .camera { animation-name: pan; }
+      .viewport { animation-name: follow; }
+      .stack-top { animation-name: fold-top; }
+      .stack-bottom { animation-name: fold-bottom; }
+      .tail { animation-name: close-gap; }
+      .overview { animation-name: center-overview; }
+      .dim { animation-name: dim-neighbors; }
+      .phase.start { animation-name: at-start; }
+      .phase.center { animation-name: at-center; }
+      .phase.shade { animation-name: at-dim; }
+      .phase.stack { animation-name: at-stack; }
+      .phase.end { animation-name: at-end; }
+    }
+    @keyframes pan {
+      0%, 14%, 98%, 100% { transform: translateX(0); }
+      21%, 72% { transform: translateX(-102px); }
+      79%, 90% { transform: translateX(-408px); }
+    }
+    @keyframes follow {
+      0%, 14%, 98%, 100% { transform: translateX(0); }
+      21%, 72% { transform: translateX(102px); }
+      79%, 90% { transform: translateX(408px); }
+    }
+    @keyframes fold-top {
+      0%, 51%, 100% { transform: scaleY(1); }
+      59%, 94% { transform: scaleY(.479167); }
+    }
+    @keyframes fold-bottom {
+      0%, 51%, 100% { transform: translate(0, 0) scaleY(1); }
+      59%, 94% { transform: translate(-204px, 100px) scaleY(.479167); }
+    }
+    @keyframes close-gap {
+      0%, 51%, 100% { transform: translateX(0); }
+      59%, 94% { transform: translateX(-204px); }
+    }
+    @keyframes center-overview {
+      0%, 51%, 100% { transform: translateX(0); }
+      59%, 94% { transform: translateX(102px); }
+    }
+    @keyframes dim-neighbors {
+      0%, 32%, 51%, 100% { opacity: 0; }
+      36%, 48% { opacity: .25; }
+    }
+    @keyframes at-start  { 0%, 14%, 99%, 100% { opacity: 1; } 16%, 96% { opacity: 0; } }
+    @keyframes at-center { 0%, 16%, 34%, 100% { opacity: 0; } 19%, 32% { opacity: 1; } }
+    @keyframes at-dim    { 0%, 34%, 51%, 100% { opacity: 0; } 36%, 48% { opacity: 1; } }
+    @keyframes at-stack  { 0%, 51%, 74%, 100% { opacity: 0; } 54%, 72% { opacity: 1; } }
+    @keyframes at-end    { 0%, 74%, 95%, 100% { opacity: 0; } 77%, 91% { opacity: 1; } }
+  </style>
+
+  <rect x=".75" y=".75" width="898.5" height="454.5" rx="22" fill="url(#stage)" stroke="#d6dbdb" stroke-width="1.5"/>
+  <g aria-hidden="true">
+    <text class="phase start"  x="450" y="43" opacity="0">Two windows share the screen</text>
+    <text class="phase center" x="450" y="43" opacity="0">Bring a window to the center</text>
+    <text class="phase shade"  x="450" y="43" opacity="0">Dim the side windows</text>
+    <text class="phase stack"  x="450" y="43">Stack two windows in one column</text>
+    <text class="phase end"    x="450" y="43" opacity="0">The last two windows share the screen</text>
+
+    <!-- Outside the physical display, a faded continuation shows which windows come next. -->
+    <g mask="url(#outside)" opacity=".64">
+      <g transform="translate(250 78)">
+        <g class="camera" transform="translate(-102)"><use xlink:href="#windows"/></g>
+      </g>
+    </g>
+
+    <ellipse cx="450" cy="320" rx="91" ry="6" fill="url(#shadow)"/>
+    <path d="M433 278h34l2.5 23c.5 5 4.5 8.5 12.5 11h-64c8-2.5 12-6 12.5-11z"
+          fill="url(#stem)" stroke="#87939b" stroke-width=".9"/>
+    <path d="M414 310.5h72c4 0 7 1 10 2.5l7 3c1.8.8 1.3 3-1.2 3H398.2c-2.5 0-3-2.2-1.2-3l7-3c3-1.5 6-2.5 10-2.5z"
+          fill="url(#foot)" stroke="#909ba3" stroke-width=".9"/>
+    <rect x="241.5" y="68.5" width="417" height="214" rx="13.5" fill="url(#bezel)" stroke="#3d4b57"/>
+    <rect x="243" y="70" width="414" height="211" rx="12" fill="none" stroke="#fff" stroke-opacity=".19"/>
+    <circle cx="450" cy="73.5" r="1.3" fill="#273740"/>
+    <g transform="translate(250 78)">
+      <g clip-path="url(#screen)">
+        <rect width="400" height="192" fill="#edf0f2"/>
+        <g class="camera" transform="translate(-102)">
+          <use xlink:href="#windows"/>
+          <g class="dim" fill="#000" opacity="0">
+            <use xlink:href="#window"/>
+            <use xlink:href="#window" x="408"/>
+          </g>
+        </g>
+      </g>
+      <rect x="-.5" y="-.5" width="401" height="193" rx="6.5" fill="none" stroke="#25343d"/>
+    </g>
+
+    <path d="M29 339.5h842" stroke="#d6dcdb"/>
+    <text x="68" y="392" font-size="24" font-weight="600" letter-spacing="-.65">Full chain</text>
+    <rect x="69.5" y="407" width="19" height="11.5" rx="2.5" fill="none" stroke="#344552" stroke-width="2"/>
+    <text x="98" y="418" font-size="17" fill="#52616b">On screen</text>
+
+    <!-- The overview travels half a column when a column is removed, keeping the chain centered. -->
+    <g transform="translate(279 359) scale(.427)">
+      <g class="overview" transform="translate(102)">
+        <use xlink:href="#windows"/>
+        <g class="viewport" transform="translate(102)">
+          <rect x="-6" y="-6" width="412" height="204" rx="13" fill="none" stroke="#fafaf7" stroke-width="10"/>
+          <rect x="-6" y="-6" width="412" height="204" rx="13" fill="none" stroke="#344552" stroke-width="5"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

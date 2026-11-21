@@ -24,7 +24,7 @@ struct PaperMenu<A: PaperActions>: View {
         if !actions.statusText.isEmpty { Text(actions.statusText) }
         Divider()
         Button("Settings…", action: openSettings).keyboardShortcut(",")
-        Button("Quit Paper Chain") { NSApp.terminate(nil) }.keyboardShortcut("q")
+        Button("Quit PaperChain") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }
 
@@ -75,7 +75,7 @@ struct PaperSettings<A: PaperActions>: View {
                     Label("Accessibility access granted", systemImage: "checkmark.circle")
                 } else {
                     Button("Grant Accessibility Access…") { actions.requestAccessibility() }
-                    Text("Allow Paper Chain in System Settings to discover and move windows.")
+                    Text("Allow PaperChain in System Settings to discover and move windows.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }

@@ -139,7 +139,7 @@ final class PaperDocks<A: PaperActions> {
         panel.hasShadow = true
         panel.animationBehavior = .none
         panel.isExcludedFromWindowsMenu = true
-        panel.title = "Paper Chain"
+        panel.title = "PaperChain"
         let view = DockContent(actions: actions, state: state, screenID: id,
             toggle: { [weak self] in self?.toggle(id) },
             drag: { [weak self] delta in self?.drag(id, delta: delta) },

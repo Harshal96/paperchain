@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Mouse motion is measured in screen coordinates because the panel moves under the pointer.
-/// A short click on the same grip expands or collapses without activating Paper Chain.
+/// A short click on the same grip expands or collapses without activating PaperChain.
 struct DockGrip: NSViewRepresentable {
     let expanded: Bool
     let vertical: Bool
@@ -23,8 +23,8 @@ struct DockGrip: NSViewRepresentable {
         view.toggle = toggle
         view.drag = drag
         view.endDrag = endDrag
-        view.setAccessibilityLabel(expanded ? "Collapse Paper Chain dock" : "Expand Paper Chain dock")
-        view.toolTip = expanded ? "Click to collapse · Drag to move" : "Paper Chain · Click to expand · Drag to move"
+        view.setAccessibilityLabel(expanded ? "Collapse PaperChain dock" : "Expand PaperChain dock")
+        view.toolTip = expanded ? "Click to collapse · Drag to move" : "PaperChain · Click to expand · Drag to move"
         view.needsDisplay = true
     }
 

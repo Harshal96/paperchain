@@ -11,11 +11,12 @@ else
     sh scripts/swiftpm build -c release --product PaperChain "$@"
     bin=$(sh scripts/swiftpm build -c release --show-bin-path "$@")
     executable="$bin/PaperChain"
-    app="dist/Paper Chain.app"
+    app="dist/PaperChain.app"
 fi
-mkdir -p "$app/Contents/MacOS"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$executable" "$app/Contents/MacOS/PaperChain"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+cp Resources/PaperChain.icns Resources/PaperChainMenu.png "$app/Contents/Resources/"
 identity=${PAPERCHAIN_SIGN_IDENTITY:-}
 if [ -z "$identity" ]; then
     identity=$(security find-identity -v -p codesigning |

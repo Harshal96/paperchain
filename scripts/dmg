@@ -17,11 +17,11 @@ done
 lipo -create "$work/arm64" "$work/x86_64" -output "$work/PaperChain"
 lipo "$work/PaperChain" -verify_arch arm64 x86_64
 volume="$work/volume"
-sh scripts/bundle --from-executable "$work/PaperChain" "$volume/Paper Chain.app"
+sh scripts/bundle --from-executable "$work/PaperChain" "$volume/PaperChain.app"
 ln -s /Applications "$volume/Applications"
 
-image=Paper-Chain.dmg
-hdiutil create -volname "Paper Chain" -srcfolder "$volume" -fs HFS+ -format UDZO "$work/$image"
+image=PaperChain.dmg
+hdiutil create -volname PaperChain -srcfolder "$volume" -fs HFS+ -format UDZO "$work/$image"
 hdiutil verify "$work/$image"
 mv -f "$work/$image" "dist/$image"
 echo "dist/$image"
