@@ -10,7 +10,7 @@ Paper Chain runs on macOS 14 Sonoma or later. Sign in to GitHub with an account 
 
 ### If macOS can’t verify the developer
 
-Version 1.1.0 uses a local signing certificate and lacks Apple notarization. If macOS says it can’t verify the developer, continue only if you trust the copy you downloaded from the Paper Chain release. After trying to open the app, go to **System Settings → Privacy & Security**. Under **Security**, choose **Open Anyway** for **Paper Chain** and confirm when prompted. [Apple’s guide to opening Mac apps safely](https://support.apple.com/en-gb/102445)
+Version 0.0.1 uses a local signing certificate and lacks Apple notarization. If macOS says it can’t verify the developer, continue only if you trust the copy you downloaded from the Paper Chain release. After trying to open the app, go to **System Settings → Privacy & Security**. Under **Security**, choose **Open Anyway** for **Paper Chain** and confirm when prompted. [Apple’s guide to opening Mac apps safely](https://support.apple.com/en-gb/102445)
 
 ## Give Paper Chain access to your windows
 

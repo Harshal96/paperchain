@@ -4,7 +4,7 @@ Paper Chain is a native macOS window manager built from scratch in Swift. It arr
 
 **[Download Paper Chain for macOS](https://github.com/Harshal96/paperchain/releases/latest/download/Paper-Chain.dmg)** · [Installation guide](../docs/installation.md) · [User guide](../docs/user-guide.md)
 
-Runs on Apple silicon and Intel Macs with macOS 14 Sonoma or later.
+Version 0.0.1 runs on Apple silicon and Intel Macs with macOS 14 Sonoma or later.
 
 ## Navigating the strip
 
