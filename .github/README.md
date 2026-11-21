@@ -20,6 +20,14 @@ Click the visible part of a neighbor to focus it, or select a window in the Pape
 - **Stacks.** Place two windows in one column to read a document above your notes. On a portrait display, PaperChain pairs windows vertically so two columns can show four windows.
 - **Floating windows.** Option-drag a window by its title bar to move it freely. When you want it back in the strip, choose **Attach window** from the dock.
 
+## Regrouping windows by topic
+
+Save your category names, then choose **Regroup windows** from the menu bar. PaperChain sends the app names, window titles, and categories to your selected provider. In this example, a draft and an outline move into **Writing**, while an editor and a build window move into **Development**. Each window stays on its display.
+
+![Four windows start in a mixed group. A decision model matches each window to Writing or Development, and the cards move into their assigned groups.](../docs/regroup-windows.svg)
+
+Under **Settings → Decisions API**, choose **TypeSafe** for hosted Jev or **Ollama (local)** to classify on your Mac. The local example uses Clef Flash, an open-weight model trained with reinforcement learning for calibrated decisions (RLCD). [Regrouping setup](../docs/user-guide.md#regroup-windows-automatically) · [About Clef Flash](https://blog.cloudflare.com/clef-decision-models/)
+
 ## Installation
 
 Sign in to GitHub with access to the repository and download the disk image. Drag **PaperChain** onto **Applications**, eject the image, and open the installed app. Choose **Grant Accessibility Access…** from its menu bar icon so it can arrange your windows. The [installation guide](../docs/installation.md) covers first-launch prompts and updates.

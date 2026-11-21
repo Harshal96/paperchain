@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="720" height="388" viewBox="0 0 720 388" role="img"
+     aria-labelledby="regroup-title regroup-description">
+  <title id="regroup-title">How PaperChain regroups windows by category</title>
+  <desc id="regroup-description">Four windows on one display start in mixed order. The user has
+    chosen Writing and Development as categories and runs Regroup windows. The selected Decisions
+    API provider, Clef Flash running locally through Ollama, chooses a category from each app
+    name and window title. Pages Draft and Notes Outline join Writing. Xcode Editor and Terminal
+    Build join Development on the same display. With reduced motion, the final groups stay still.</desc>
+
+  <defs>
+    <linearGradient id="paper" x2=".8" y2="1">
+      <stop stop-color="#fbfaf7"/><stop offset="1" stop-color="#f4f5f3"/>
+    </linearGradient>
+    <linearGradient id="peach" x2=".8" y2="1">
+      <stop stop-color="#ffe6d8"/><stop offset="1" stop-color="#f2d0bf"/>
+    </linearGradient>
+    <linearGradient id="butter" x2=".8" y2="1">
+      <stop stop-color="#fff1c8"/><stop offset="1" stop-color="#efdda9"/>
+    </linearGradient>
+    <linearGradient id="periwinkle" x2=".8" y2="1">
+      <stop stop-color="#e1e5ff"/><stop offset="1" stop-color="#cad2f3"/>
+    </linearGradient>
+    <linearGradient id="mint" x2=".8" y2="1">
+      <stop stop-color="#ddf2e9"/><stop offset="1" stop-color="#c0e0d6"/>
+    </linearGradient>
+    <g id="record">
+      <rect x=".6" y=".6" width="263.8" height="48.8" rx="9" stroke="#4c5860" stroke-opacity=".25"/>
+      <path d="M115 13v24" stroke="#44535c" stroke-opacity=".22"/>
+    </g>
+    <path id="folder" d="M2 6a2 2 0 0 1 2-2h6l3 3h10a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"
+          fill="none" stroke="#51616a" stroke-width="1.8" stroke-linejoin="round"/>
+    <path id="arrow" d="M0 0h47m-6-6 6 6-6 6" fill="none" stroke="#697982"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect id="group-panel" width="309" height="227" rx="14" stroke="#bcc6c9" stroke-width="1.2" fill="#fff" fill-opacity=".62"/>
+  </defs>
+
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #34424c; }
+    .heading { font-size: 31px; font-weight: 600; letter-spacing: -.9px; text-anchor: middle; }
+    .provider { font-size: 22px; text-anchor: middle; }
+    .label, .category, .choice, .app { font-size: 22px; }
+    .label, .category { font-weight: 600; letter-spacing: -.35px; }
+    .title, .group-name { font-size: 25px; font-weight: 600; letter-spacing: -.45px; }
+    /* The base SVG is the settled result for reduced-motion and static renderers. */
+    @media (prefers-reduced-motion: no-preference) {
+      .loop, .before, .input-label, .classifier, .result-heading, .result-panels, .result-labels, .command,
+      .decision, .pages, .xcode, .notes, .terminal {
+        animation-duration: 18s;
+        animation-timing-function: cubic-bezier(.42, 0, .22, 1);
+        animation-iteration-count: infinite;
+      }
+      .loop { animation-name: restart; }
+      .before { animation-name: setup; }
+      .command { animation-name: press; }
+      .input-label { animation-name: inputs; }
+      .classifier { animation-name: classify; }
+      .decision.one { animation-name: first-answer; }
+      .decision.two { animation-name: second-answer; }
+      .decision.three { animation-name: third-answer; }
+      .decision.four { animation-name: fourth-answer; }
+      .result-heading { animation-name: result-heading; }
+      .result-panels { animation-name: group-panels; }
+      .result-labels { animation-name: group-labels; }
+      .pages { animation-name: move-pages; }
+      .xcode { animation-name: move-xcode; }
+      .notes { animation-name: move-notes; }
+      .terminal { animation-name: move-terminal; }
+    }
+    @keyframes restart { 0%, 94% { opacity: 1; } 97%, 98% { opacity: 0; } 100% { opacity: 1; } }
+    @keyframes setup { 0%, 22%, 97%, 100% { opacity: 1; } 26%, 96.99% { opacity: 0; } }
+    @keyframes press { 0%, 19%, 24%, 100% { transform: translateY(0); } 21% { transform: translateY(3px); } }
+    @keyframes inputs { 0%, 58%, 97%, 100% { opacity: 1; } 62%, 96.99% { opacity: 0; } }
+    @keyframes classify { 0%, 26%, 63%, 100% { opacity: 0; } 29%, 59% { opacity: 1; } }
+    @keyframes first-answer  { 0%, 29%, 63%, 100% { opacity: 0; } 33%, 59% { opacity: 1; } }
+    @keyframes second-answer { 0%, 32%, 63%, 100% { opacity: 0; } 36%, 59% { opacity: 1; } }
+    @keyframes third-answer  { 0%, 35%, 63%, 100% { opacity: 0; } 39%, 59% { opacity: 1; } }
+    @keyframes fourth-answer { 0%, 38%, 63%, 100% { opacity: 0; } 42%, 59% { opacity: 1; } }
+    @keyframes result-heading { 0%, 63%, 97%, 100% { opacity: 0; } 66%, 96.99% { opacity: 1; } }
+    @keyframes group-panels { 0%, 71%, 97%, 100% { opacity: 0; } 77%, 96.99% { opacity: 1; } }
+    @keyframes group-labels { 0%, 77%, 97%, 100% { opacity: 0; } 80%, 96.99% { opacity: 1; } }
+    /* Split the columns first so window labels never cross while the rows align. */
+    @keyframes move-pages {
+      0%, 71%, 97%, 100% { transform: translate(0, 0); }
+      80%, 96.99% { transform: translate(0, 48px); }
+    }
+    @keyframes move-xcode {
+      0%, 62%, 97%, 100% { transform: translate(0, 0); }
+      71% { transform: translate(356px, 0); }
+      80%, 96.99% { transform: translate(356px, -11px); }
+    }
+    @keyframes move-notes {
+      0%, 71%, 97%, 100% { transform: translate(0, 0); }
+      80%, 96.99% { transform: translate(0, -4px); }
+    }
+    @keyframes move-terminal {
+      0%, 62%, 97%, 100% { transform: translate(0, 0); }
+      71% { transform: translate(356px, 0); }
+      80%, 96.99% { transform: translate(356px, -63px); }
+    }
+  </style>
+
+  <rect x=".75" y=".75" width="718.5" height="386.5" rx="20" fill="url(#paper)" stroke="#d6dbdb" stroke-width="1.5"/>
+  <path d="M27 83.5h666" stroke="#d6dcdb"/>
+  <g class="loop" aria-hidden="true">
+    <g class="before" opacity="0">
+      <text class="heading" x="360" y="51">Start with mixed windows</text>
+      <text class="label" x="405" y="116">Your categories</text>
+      <use xlink:href="#folder" x="405" y="144"/>
+      <text class="category" x="445" y="165">Writing</text>
+      <use xlink:href="#folder" x="405" y="201"/>
+      <text class="category" x="445" y="222">Development</text>
+      <g transform="translate(405 278)">
+        <g class="command">
+          <rect width="265" height="51" rx="10" fill="#3d4e5b" stroke="#2c3c48"/>
+          <path d="M17 19h8l6 6h8m-6-5 6 5-6 5m-16 1h7l3-3" fill="none"
+                stroke="#edf2f2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="51" y="34" style="fill:#fff;font-size:22px;font-weight:600;letter-spacing:-.45px">Regroup windows</text>
+        </g>
+      </g>
+    </g>
+
+    <text class="input-label label" x="49" y="116" opacity="0">App and window title</text>
+    <g class="classifier" opacity="0">
+      <text class="heading" x="360" y="37">Decisions API</text>
+      <text class="provider" x="360" y="66">Clef Flash via Ollama on this Mac</text>
+      <text class="label" x="405" y="116">Model’s choice</text>
+    </g>
+    <g class="choice">
+      <g class="decision one" opacity="0"><use xlink:href="#arrow" x="331" y="157"/><text x="405" y="165">Writing</text></g>
+      <g class="decision two" opacity="0"><use xlink:href="#arrow" x="331" y="216"/><text x="405" y="224">Development</text></g>
+      <g class="decision three" opacity="0"><use xlink:href="#arrow" x="331" y="275"/><text x="405" y="283">Writing</text></g>
+      <g class="decision four" opacity="0"><use xlink:href="#arrow" x="331" y="334"/><text x="405" y="342">Development</text></g>
+    </g>
+
+    <text class="result-heading heading" x="360" y="51">Two groups on the same display</text>
+    <g class="result-panels">
+      <use xlink:href="#group-panel" x="27" y="112"/>
+      <use xlink:href="#group-panel" x="383" y="112"/>
+    </g>
+    <g class="result-labels">
+      <use xlink:href="#folder" x="49" y="137"/>
+      <text class="group-name" x="88" y="160">Writing</text>
+      <use xlink:href="#folder" x="405" y="137"/>
+      <text class="group-name" x="444" y="160">Development</text>
+    </g>
+
+    <!-- Each window retains its app, title and color from the input list into its named group. -->
+    <g transform="translate(49 132)">
+      <g class="pages" transform="translate(0 48)">
+        <use xlink:href="#record" fill="url(#peach)"/>
+        <text class="app" x="14" y="33">Pages</text><text class="title" x="132" y="34">Draft</text>
+      </g>
+    </g>
+    <g transform="translate(49 191)">
+      <g class="xcode" transform="translate(356 -11)">
+        <use xlink:href="#record" fill="url(#butter)"/>
+        <text class="app" x="14" y="33">Xcode</text><text class="title" x="132" y="34">Editor</text>
+      </g>
+    </g>
+    <g transform="translate(49 250)">
+      <g class="notes" transform="translate(0 -4)">
+        <use xlink:href="#record" fill="url(#periwinkle)"/>
+        <text class="app" x="14" y="33">Notes</text><text class="title" x="132" y="34">Outline</text>
+      </g>
+    </g>
+    <g transform="translate(49 309)">
+      <g class="terminal" transform="translate(356 -63)">
+        <use xlink:href="#record" fill="url(#mint)"/>
+        <text class="app" x="14" y="33">Terminal</text><text class="title" x="132" y="34">Build</text>
+      </g>
+    </g>
+  </g>
+</svg>

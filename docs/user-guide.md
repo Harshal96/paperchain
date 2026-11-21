@@ -49,6 +49,10 @@ For two or more categories, choose a provider under **Decisions API**. When you 
 
 Choose **Regroup windows** from the menu bar. PaperChain creates matching groups as needed and keeps each window on its display.
 
+The animation illustrates a local decision with two saved categories, **Writing** and **Development**. To try the same model, install it with `ollama pull clef-flash`, then refresh the list and select it in **Settings… → Decisions API → Ollama (local)**. [Clef Flash on Ollama](https://ollama.com/library/clef-flash)
+
+![A local decision model uses four app names and window titles to group the writing windows together and the development windows together.](regroup-windows.svg)
+
 ## Troubleshooting
 
 - **The dock is empty.** Check **Settings… → Window access** for **Accessibility access granted**. Bring the app out of hiding, restore a minimized window from the macOS Dock, or exit full screen. Then choose **Rescan all windows** in the PaperChain menu bar.
