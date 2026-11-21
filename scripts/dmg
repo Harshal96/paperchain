@@ -1,0 +1,27 @@
+#!/bin/sh
+set -eu
+
+mkdir -p dist
+work=$(mktemp -d dist/.dmg.XXXXXX)
+trap 'rm -rf "$work"' EXIT
+trap 'exit 1' HUP INT TERM
+
+minimum=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' Resources/Info.plist)
+for arch in arm64 x86_64; do
+    triple="$arch-apple-macosx$minimum"
+    sh scripts/swiftpm build -c release --product PaperChain --triple "$triple" "$@"
+    bin=$(sh scripts/swiftpm build -c release --show-bin-path --triple "$triple" "$@")
+    cp "$bin/PaperChain" "$work/$arch"
+done
+
+lipo -create "$work/arm64" "$work/x86_64" -output "$work/PaperChain"
+lipo "$work/PaperChain" -verify_arch arm64 x86_64
+volume="$work/volume"
+sh scripts/bundle --from-executable "$work/PaperChain" "$volume/Paper Chain.app"
+ln -s /Applications "$volume/Applications"
+
+image=Paper-Chain.dmg
+hdiutil create -volname "Paper Chain" -srcfolder "$volume" -fs HFS+ -format UDZO "$work/$image"
+hdiutil verify "$work/$image"
+mv -f "$work/$image" "dist/$image"
+echo "dist/$image"

@@ -1,10 +1,20 @@
 #!/bin/sh
 set -eu
-sh scripts/swiftpm build -c release --product PaperChain "$@"
-bin=$(sh scripts/swiftpm build -c release --show-bin-path "$@")
-app="dist/Paper Chain.app"
+if [ "${1:-}" = "--from-executable" ]; then
+    if [ "$#" -ne 3 ]; then
+        echo 'Usage: sh scripts/bundle --from-executable EXECUTABLE APP' >&2
+        exit 2
+    fi
+    executable=$2
+    app=$3
+else
+    sh scripts/swiftpm build -c release --product PaperChain "$@"
+    bin=$(sh scripts/swiftpm build -c release --show-bin-path "$@")
+    executable="$bin/PaperChain"
+    app="dist/Paper Chain.app"
+fi
 mkdir -p "$app/Contents/MacOS"
-cp "$bin/PaperChain" "$app/Contents/MacOS/PaperChain"
+cp "$executable" "$app/Contents/MacOS/PaperChain"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 identity=${PAPERCHAIN_SIGN_IDENTITY:-}
 if [ -z "$identity" ]; then
