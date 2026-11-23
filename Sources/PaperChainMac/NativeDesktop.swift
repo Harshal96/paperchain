@@ -34,6 +34,7 @@ final class NativeDesktop {
         let origin: CGPoint
         let startFrame: CGRect
         let bodyClick: Bool
+        let closeButton: Bool
         let sameApplication: Bool
     }
 
@@ -98,6 +99,17 @@ final class NativeDesktop {
     var owned = Set<String>()
     var parkedAt: [String: TimeInterval] = [:]
     var userMinimized = Set<String>()
+    final class ObserverContext {
+        weak var desktop: NativeDesktop?
+        let observesWindow: Bool
+
+        init(_ desktop: NativeDesktop, observesWindow: Bool) {
+            self.desktop = desktop
+            self.observesWindow = observesWindow
+        }
+    }
+    lazy var appNotifications = ObserverContext(self, observesWindow: false)
+    lazy var windowNotifications = ObserverContext(self, observesWindow: true)
     var observers: [pid_t: AXObserver] = [:]
     var notificationTokens: [(NotificationCenter, NSObjectProtocol)] = []
     var lastMouseDown: TimeInterval = 0

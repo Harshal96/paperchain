@@ -107,6 +107,7 @@ extension NativeDesktop {
                     aliases[titleKey] = id
                 }
                 if previous == nil {
+                    observeWindowDestruction(seed.element, for: pid)
                     scanOrder.append(id)
                     if completedInitialInventory { discovered.append(id) }
                 }
