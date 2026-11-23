@@ -223,12 +223,7 @@ extension NativeDesktop {
             if name == kAXWindowMovedNotification, moveReadbacks.coversMoveNotification(id, dragging: draggingID) {
                 return
             }
-            if let actual = NativeAX.frame(element), let w = entries[id], !w.rect.approximatelyEquals(actual) {
-                entries[id]?.rect = actual
-                entries[id]?.lastRequestedSize = nil
-                entries[id]?.lastRequestedOrigin = nil
-            }
-            if draggingID != nil { clearSideDimming() } else { scheduleSideDimming() }
+            windowFrameChanged(NativeAX.frame(element), for: id)
             // Resizing is the AX transition delivered by applications entering or leaving full screen.
             if name == kAXWindowResizedNotification,
                NativeAX.flag(element, "AXFullScreen") == true || suspendedIDs.contains(id) { queueScan() }
@@ -240,6 +235,22 @@ extension NativeDesktop {
         default:
             break
         }
+    }
+
+    func windowFrameChanged(_ actual: CGRect?, for id: String) {
+        if let actual, let window = entries[id], !window.rect.approximatelyEquals(actual) {
+            entries[id]?.rect = actual
+            entries[id]?.lastRequestedSize = nil
+            entries[id]?.lastRequestedOrigin = nil
+        }
+        // AX can repeat a move or resize notification while the mouse is held still.
+        if let gesture, gesture.window == id {
+            guard let actual, gesture.startFrame.approximatelyEquals(actual) else {
+                clearSideDimming()
+                return
+            }
+        }
+        scheduleSideDimming()
     }
 
     func installMouseMonitor() {
@@ -413,19 +424,30 @@ extension NativeDesktop {
             let eligible = candidate.bodyClick && !moved && active && !owned.contains(id)
             let releaseHit = eligible ? hit(at: point) : nil
             let sameBody = releaseHit.map { CFEqual($0.window, window.element) && isBody($0) } == true
-            let click = focusObservation.confirmClick(id, on: activeStripLocation?(id)?.screen,
-                                                     bodyWindow: sameBody ? id : nil, nativeFocused: active && matchesFocus,
-                                                     at: ProcessInfo.processInfo.systemUptime)
-            pointerLog.debug("Managed pointer up eligible=\(eligible, privacy: .public) sameBody=\(sameBody, privacy: .public) active=\(active, privacy: .public) nativeFocused=\(matchesFocus, privacy: .public) clicked=\(click == .body, privacy: .public)")
-            deferredPointerFocus = false
-            if click == .body {
-                let sameApp = candidate.sameApplication && ProcessInfo.processInfo.systemUptime - lastAppActivation > NativeFocusObservation.suppressionInterval
-                onEvent?(.bodyClicked(id, sameApplication: sameApp))
-            } else if click == .focused {
-                onEvent?(.focused(id))
-            } else {
-                resamplePointerFocus()
-            }
+            pointerLog.debug("Managed pointer up eligible=\(eligible, privacy: .public) sameBody=\(sameBody, privacy: .public) active=\(active, privacy: .public) nativeFocused=\(matchesFocus, privacy: .public)")
+            finishClick(candidate, sameBody: sameBody, nativeFocused: active && matchesFocus)
+        }
+    }
+
+    func finishClick(_ candidate: Gesture, sameBody: Bool, nativeFocused: Bool) {
+        let id = candidate.window
+        let keepsDimming = nativeFocused && dimmedAround == id
+        let time = ProcessInfo.processInfo.systemUptime
+        // The center already has focus. Validate its display without requesting a body-click activation.
+        let click = focusObservation.confirmClick(id, on: activeStripLocation?(id)?.screen,
+                                                 bodyWindow: sameBody && !keepsDimming ? id : nil,
+                                                 nativeFocused: nativeFocused, at: time)
+        deferredPointerFocus = false
+        switch click {
+        case .body:
+            let sameApp = candidate.sameApplication && time - lastAppActivation > NativeFocusObservation.suppressionInterval
+            onEvent?(.bodyClicked(id, sameApplication: sameApp))
+        case .focused where keepsDimming:
+            checkExposureAfterActivation(id)
+        case .focused:
+            onEvent?(.focused(id))
+        case nil:
+            resamplePointerFocus()
         }
     }
 }

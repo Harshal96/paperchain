@@ -1,6 +1,6 @@
 # Checks and simulator
 
-From the repository root, run all checks with Swift 5.9 or later on Linux or macOS. The runner builds Swift executables, including the simulator. The checks use synthetic windows, a temporary recovery journal and a fake HTTP transport, so they run offline and leave desktop windows alone.
+From the repository root, run the executable checks with Swift 5.9 or later on Linux or macOS. The runner builds Swift executables, including the simulator. The checks use synthetic windows, a temporary recovery journal and a fake HTTP transport, so they run offline and leave desktop windows alone.
 
 ```sh
 sh scripts/check
@@ -15,6 +15,8 @@ sh scripts/check
 | [NativeMetadataChecks](NativeMetadataChecks/) | Batched Accessibility reads, partial results and fallback reads. The runner includes this suite on macOS. |
 
 To run one suite, pass its name to the SwiftPM wrapper, for example `sh scripts/swiftpm run LayoutChecks`.
+
+On macOS with Swift 6 or later, run `sh scripts/swiftpm test --disable-xctest` for the [native side-dimming regressions](SideDimmingTests/). These cover held clicks, mouse-up and window geometry notifications.
 
 ## Simulator
 
