@@ -2,6 +2,7 @@ import AppKit
 import ChainCore
 import Decisions
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 struct PaperMenu<A: PaperActions>: View {
@@ -34,6 +35,8 @@ struct PaperSettings<A: PaperActions>: View {
     @State private var categoryText = ""
     @State private var keyEntry = ""
     @State private var confirmingRemoval = false
+    @State private var choosingFloatingApp = false
+    @State private var floatingAppError: String?
 
     private var screens: [ScreenState] {
         actions.workspace.screens.values.filter(\.isConnected).sorted {
@@ -70,6 +73,7 @@ struct PaperSettings<A: PaperActions>: View {
                                                          set: { actions.setDimSideWindows($0) }))
                     .help("Dim other windows when the focused window has a visible column on each side.")
             }
+            floatingAppSettings
             Section("Window access") {
                 if actions.hasAccessibility {
                     Label("Accessibility access granted", systemImage: "checkmark.circle")
@@ -125,6 +129,47 @@ struct PaperSettings<A: PaperActions>: View {
             Button("Remove key", role: .destructive) { keyEntry = ""; actions.saveAPIKey("") }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    private var floatingAppSettings: some View {
+        Section("Floating apps") {
+            Text("PaperChain leaves these apps’ windows outside its groups.")
+                .font(.callout).foregroundStyle(.secondary)
+            ForEach(actions.floatingApps.sorted { ($0.value.localizedLowercase, $0.key) < ($1.value.localizedLowercase, $1.key) },
+                    id: \.key) { bundleID, name in
+                LabeledContent(name) {
+                    Button("Remove") { actions.setAppFloating(bundleID, name: nil) }
+                        .accessibilityLabel("Remove \(name) from Floating apps")
+                }
+            }
+            Button("Add Application…") {
+                floatingAppError = nil
+                choosingFloatingApp = true
+            }
+            .fileImporter(isPresented: $choosingFloatingApp, allowedContentTypes: [.applicationBundle],
+                          onCompletion: addFloatingApp)
+            .fileDialogDefaultDirectory(FileManager.default.urls(for: .applicationDirectory, in: .localDomainMask).first)
+            if let floatingAppError {
+                Text(floatingAppError).font(.callout).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func addFloatingApp(_ selection: Result<URL, Error>) {
+        guard case let .success(url) = selection else {
+            floatingAppError = "Could not open the selected application."
+            return
+        }
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        guard let bundle = Bundle(url: url), let bundleID = bundle.bundleIdentifier, !bundleID.isEmpty else {
+            floatingAppError = "The selected application has no bundle identifier."
+            return
+        }
+        let name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String
+            ?? url.deletingPathExtension().lastPathComponent
+        actions.setAppFloating(bundleID, name: name)
     }
 
     @ViewBuilder

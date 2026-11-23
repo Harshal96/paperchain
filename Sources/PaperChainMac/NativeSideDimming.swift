@@ -27,14 +27,15 @@ extension NativeDesktop {
         // window actually has focus, including after switching to Settings or a floater.
         guard dimSideWindows, running, trusted,
               let app = NSWorkspace.shared.frontmostApplication,
-              app.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+              app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              !isFloatingApp(app.bundleIdentifier) else {
             clearSideDimming()
             return
         }
         let application = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(application, 0.18)
         let focused = NativeAX.element(application, kAXFocusedWindowAttribute)
-        updateSideDimming(focused: focused.flatMap { id(of: $0) })
+        updateSideDimming(focused: focused.flatMap { managedID(of: $0) })
     }
 
     func updateSideDimming(focused id: String?) {
@@ -46,7 +47,7 @@ extension NativeDesktop {
         }
         let targets = plan.windows.compactMap { id -> Window? in
             guard !suspendedIDs.contains(id), !owned.contains(id), !awaitingPlacement(id),
-                  let window = entries[id], !window.app.isHidden else { return nil }
+                  let window = managedWindow(id), !window.app.isHidden else { return nil }
             return window
         }
         sideDimmers.update(windows: targets, bounds: plan.bounds.nativeRect)

@@ -54,8 +54,9 @@ final class NativeDesktop {
     var exposureCheck: ExposureCheck?
     private(set) var screens: [ScreenInfo] = []
     private(set) var trusted = false
+    private(set) var floatingAppBundleIDs = Set<String>()
     var windows: [WindowInfo] {
-        scanOrder.compactMap { focusObservation.awaitingFocus($0) ? nil : entries[$0]?.info }
+        scanOrder.compactMap { focusObservation.awaitingFocus($0) ? nil : managedWindow($0)?.info }
     }
     var draggingID: String? { gesture?.window }
     var suspendedIDs = Set<String>()
@@ -203,6 +204,49 @@ final class NativeDesktop {
         }
     }
 
+    func isFloatingApp(_ bundleID: String?) -> Bool {
+        bundleID.map(floatingAppBundleIDs.contains) ?? false
+    }
+
+    func managedWindow(_ id: String) -> Window? {
+        guard let window = entries[id], !isFloatingApp(window.info.bundleID) else { return nil }
+        return window
+    }
+
+    func setFloatingAppBundleIDs(_ bundleIDs: Set<String>) {
+        guard floatingAppBundleIDs != bundleIDs else { return }
+        floatingAppBundleIDs = bundleIDs
+        for (id, window) in entries where isFloatingApp(window.info.bundleID) {
+            focusObservation.forget(id)
+            settlingPlacements.removeValue(forKey: id)
+            pendingRelease.remove(id)
+            restores[id]?.policy.intent = .release
+            refreshPendingMove(id)
+            if deferredActivation == id { deferredActivation = nil }
+            if gesture?.window == id {
+                gesture = nil
+                skippedDuringGesture = false
+            }
+        }
+        clearSideDimming()
+        cancelExposureCheck()
+        releaseFloatingWindows()
+    }
+
+    func shouldDeferFloatingRelease(_ id: String, window: Window) -> Bool {
+        isFloatingApp(window.info.bundleID) && (suspendedIDs.contains(id) || window.app.isHidden)
+    }
+
+    func releaseFloatingWindows(retrying restoresToRetry: Set<String> = []) {
+        guard trusted, !floatingAppBundleIDs.isEmpty else { return }
+        // Retain native ownership until a hidden, minimized, or full-screen window
+        // can be released. The workspace drops its slot immediately.
+        for id in Set(originals.keys).union(owned) {
+            guard let window = entries[id], isFloatingApp(window.info.bundleID) else { continue }
+            release(id, retryRestore: restoresToRetry.contains(id))
+        }
+    }
+
     func icon(for window: String) -> NSImage? {
         guard let app = entries[window]?.app else { return nil }
         let pid = app.processIdentifier
@@ -235,9 +279,25 @@ final class NativeDesktop {
         }
     }
 
-    func isProcessGone(for window: String) -> Bool {
+    private static func processIdentity(for window: String) -> (pid: pid_t, stamp: Int64)? {
         let parts = window.split(separator: ":", maxSplits: 2)
-        guard parts.count == 3, let pid = Int32(parts[0]), let stamp = Int64(parts[1]) else { return false }
+        guard parts.count == 3, let pid = pid_t(parts[0]), let stamp = Int64(parts[1]) else { return nil }
+        return (pid, stamp)
+    }
+
+    func isFloatingWindow(_ window: WindowInfo) -> Bool {
+        if let bundleID = window.bundleID ?? entries[window.id]?.info.bundleID {
+            return isFloatingApp(bundleID)
+        }
+        // Older workspaces only saved the window ID. Trust the PID only for the same launch.
+        guard !floatingAppBundleIDs.isEmpty, let (pid, stamp) = Self.processIdentity(for: window.id), stamp > 0,
+              let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated,
+              Self.launchToken(app) == stamp else { return false }
+        return isFloatingApp(app.bundleIdentifier)
+    }
+
+    func isProcessGone(for window: String) -> Bool {
+        guard let (pid, stamp) = Self.processIdentity(for: window) else { return false }
         guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated else { return true }
         return stamp > 0 && Self.launchToken(app) > 0 && stamp != Self.launchToken(app)
     }
@@ -268,6 +328,7 @@ final class NativeDesktop {
             grantRequest = nil
             installMouseMonitor()
             scanWindows()
+            if !oldTrusted { releaseFloatingWindows(retrying: owned) }
         } else {
             clearSideDimming()
             moveReadbacks = NativeMoveReadbacks()
@@ -313,7 +374,7 @@ final class NativeDesktop {
     func place(_ id: String, in frame: Box, on screenID: String) {
         if draggingID == id { skippedDuringGesture = true; return }
         guard trusted, !pendingRelease.contains(id), !suspendedIDs.contains(id),
-              let target = screens.first(where: { $0.id == screenID }), let window = entries[id] else { return }
+              let target = screens.first(where: { $0.id == screenID }), let window = managedWindow(id) else { return }
         let rect = frame.nativeRect
         guard !rect.isNull, !rect.isInfinite, rect.width >= 1, rect.height >= 1 else { return }
         if let settlement = settlingPlacements[id], settlement.screen == target {
@@ -396,7 +457,7 @@ final class NativeDesktop {
     }
 
     private func failOpen(_ id: String) {
-        guard pendingRelease.insert(id).inserted else { return }
+        guard managedWindow(id) != nil, pendingRelease.insert(id).inserted else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, self.running, self.pendingRelease.contains(id), self.entries[id] != nil else { return }
             if self.draggingID == id {
@@ -516,7 +577,7 @@ final class NativeDesktop {
     func raise(_ id: String, activate: Bool) {
         if activate { deferredActivation = nil }
         if draggingID != nil { skippedDuringGesture = true; return }
-        guard trusted, !pendingRelease.contains(id), !suspendedIDs.contains(id), let w = entries[id] else { return }
+        guard trusted, !pendingRelease.contains(id), !suspendedIDs.contains(id), let w = managedWindow(id) else { return }
         if settlingPlacements[id] != nil {
             if activate { deferredActivation = id }
             return
@@ -530,9 +591,9 @@ final class NativeDesktop {
 
     func park(_ id: String) {
         if draggingID == id { skippedDuringGesture = true; return }
-        refreshPendingMove(id)
         guard trusted, !pendingRelease.contains(id),
-              !suspendedIDs.contains(id), let w = entries[id] else { return }
+              !suspendedIDs.contains(id), let w = managedWindow(id) else { return }
+        refreshPendingMove(id)
         settlingPlacements.removeValue(forKey: id)
         if deferredActivation == id { deferredActivation = nil }
         if let request = restores[id] {
@@ -601,18 +662,22 @@ final class NativeDesktop {
         }
     }
 
-    func release(_ id: String) {
+    func release(_ id: String, retryRestore: Bool = false) {
         refreshPendingMove(id)
-        guard trusted, let w = entries[id] else { return }
+        guard trusted, let w = entries[id], !shouldDeferFloatingRelease(id, window: w) else { return }
         settlingPlacements.removeValue(forKey: id)
         let wasOwned = owned.contains(id)
         if deferredActivation == id { deferredActivation = nil }
-        if wasOwned, !unpark(id, intent: .release) { return }
-        guard let original = originals.removeValue(forKey: id), !suspendedIDs.contains(id),
+        if wasOwned, !unpark(id, intent: .release, retry: retryRestore) { return }
+        guard let original = originals[id] else { return }
+        let floating = isFloatingApp(w.info.bundleID)
+        if !floating { originals.removeValue(forKey: id) }
+        guard !suspendedIDs.contains(id),
               NativeAX.flag(w.element, "AXFullScreen") != true,
               wasOwned || NativeAX.flag(w.element, kAXMinimizedAttribute) == false,
               let display = screens.first(where: { $0.id == original.screen }) ?? bestScreen(for: original.frame)
         else { return }
+        originals.removeValue(forKey: id)
         entries[id]?.lastRequestedSize = nil
         entries[id]?.lastRequestedOrigin = nil
         writeFrame(original.frame, for: id, on: display, purpose: .restoreOriginal)

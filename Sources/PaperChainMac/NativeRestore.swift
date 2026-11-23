@@ -62,7 +62,10 @@ extension NativeDesktop {
     private func verifyRestore(_ id: String, request: RestoreRequest, after delay: Double) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self, self.running, self.restores[id] === request, let window = self.entries[id] else { return }
-            guard self.trusted else { request.exhausted = true; return }
+            guard self.trusted, !self.shouldDeferFloatingRelease(id, window: window) else {
+                request.exhausted = true
+                return
+            }
             switch request.policy.check(minimized: NativeAX.flag(window.element, kAXMinimizedAttribute)) {
             case .confirmed:
                 self.completeRestore(id, fromNotification: false)
@@ -126,8 +129,10 @@ extension NativeDesktop {
             let intent = request.policy.intent
             if intent == .park {
                 replaceRestore(id, intent: intent)
-            } else if unpark(id, intent: intent, retry: true), intent == .release {
-                release(id)
+            } else if intent == .release {
+                release(id, retryRestore: true)
+            } else {
+                _ = unpark(id, intent: intent, retry: true)
             }
         }
     }
