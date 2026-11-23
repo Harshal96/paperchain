@@ -49,7 +49,7 @@ final class NativeDesktop {
             else { clearSideDimming() }
         }
     }
-    var isActiveGroupWindow: ((_ id: String, _ screenID: String) -> Bool)?
+    var activeStripLocation: ((_ id: String) -> (screen: String, clipped: Bool)?)?
     var exposureCheck: ExposureCheck?
     private(set) var screens: [ScreenInfo] = []
     private(set) var trusted = false
@@ -100,6 +100,8 @@ final class NativeDesktop {
     var userMinimized = Set<String>()
     var observers: [pid_t: AXObserver] = [:]
     var notificationTokens: [(NotificationCenter, NSObjectProtocol)] = []
+    var lastMouseDown: TimeInterval = 0
+    var deferredPointerFocus = false
     var mouseMonitor: Any?
     var gesture: Gesture?
     var skippedDuringGesture = false

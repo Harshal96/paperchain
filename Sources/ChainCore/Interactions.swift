@@ -1,14 +1,18 @@
 import Foundation
 
 extension Workspace {
+    package static func physicalScreen(at point: CGPoint, in physical: [String: CGRect]) -> String? {
+        let hits = physical.compactMap { id, bounds in
+            bounds.contains(point) ? id : nil
+        }
+        return hits.count == 1 ? hits[0] : nil
+    }
+
     package static func dropScreen(at point: CGPoint, physical: [String: CGRect],
                                    windowScreen: @autoclosure () -> String?) -> String? {
         // A title-bar drag can finish over the menu bar or Dock, outside all work areas.
         // In a genuine display gap (or on mirrored screens), retain the frame-based fallback.
-        let hits = physical.compactMap { id, bounds in
-            bounds.contains(point) ? id : nil
-        }
-        return hits.count == 1 ? hits[0] : windowScreen()
+        physicalScreen(at: point, in: physical) ?? windowScreen()
     }
 
     /// An observed frame never calls this method. Only mouse-up after a physical window drag does.

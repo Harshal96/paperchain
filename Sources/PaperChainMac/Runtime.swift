@@ -59,10 +59,11 @@ final class Runtime: NSObject, PaperActions {
                   }) else { return nil }
             return (screen.info, self.presentation.exposure(for: id, at: self.now))
         }
-        desktop.isActiveGroupWindow = { [weak self] id, screen in
-            guard let self, let owner = self.workspace.location(of: id), owner.screenID == screen,
-                  self.workspace.screens[screen]?.activeGroupID == owner.groupID else { return false }
-            return self.availableWindowIDs.contains(id) && !self.workspace.placementPaused.contains(id)
+        desktop.activeStripLocation = { [weak self] id in
+            guard let self, self.availableWindowIDs.contains(id), !self.workspace.placementPaused.contains(id),
+                  let owner = self.workspace.location(of: id), let screen = self.workspace.screens[owner.screenID],
+                  screen.isConnected, screen.enabled, screen.activeGroupID == owner.groupID else { return nil }
+            return (screen.id, self.presentation.isClipped(id))
         }
         desktop.start()
         ingest(force: true, selectFrontmost: true)

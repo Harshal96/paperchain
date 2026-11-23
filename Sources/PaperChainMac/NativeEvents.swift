@@ -221,20 +221,22 @@ extension NativeDesktop {
 
     func installMouseMonitor() {
         guard mouseMonitor == nil else { return }
+        lastMouseDown = ProcessInfo.processInfo.systemUptime
         mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
             MainActor.assumeIsolated { self?.handleMouse(event) }
         }
         // A drag can finish on our own panel; global monitors only receive other apps' events.
         localMouseUp = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
             MainActor.assumeIsolated {
-                if event.type == .leftMouseDown { self?.beginPointerPress() }
+                if event.type == .leftMouseDown { self?.beginPointerPress(at: event.timestamp) }
                 else { self?.handleMouse(event) }
             }
             return event
         }
     }
 
-    private func beginPointerPress() {
+    private func beginPointerPress(at time: Double) {
+        lastMouseDown = time
         cancelExposureCheck()
         gesture = nil
         deferredActivation = nil
@@ -279,10 +281,19 @@ extension NativeDesktop {
     func handleMouse(_ event: NSEvent) {
         guard running, trusted, let point = event.cgEvent?.location else { return }
         if event.type == .leftMouseDown {
-            beginPointerPress()
-            guard let hit = hit(at: point) else { return }
+            beginPointerPress(at: event.timestamp)
+            let hit = hit(at: point)
+            let id = hit.flatMap { self.id(of: $0.window) }
+            if let element = hit?.element, let role = NativeAX.attribute(element, kAXRoleAttribute) as? String,
+               [kAXDockItemRole, kAXMenuBarItemRole, kAXMenuItemRole, kAXMenuRole].contains(role) {
+                // A Dock or Window menu item can intentionally activate a window on another monitor.
+                return
+            }
+            focusObservation.locatePress(at: point, time: event.timestamp, displays: physicalScreens,
+                                         hit: id.flatMap { activeStripLocation?($0) })
+            guard let hit else { return }
             let windowElement = hit.window
-            guard let id = id(of: windowElement) else {
+            guard let id else {
                 // A direct click can be the first observation for apps that omit the create event.
                 if let pid = appPID(of: windowElement), NSRunningApplication(processIdentifier: pid)?.activationPolicy == .regular,
                    NativeAX.applicability(windowElement) == true { queueScan(for: pid) }
@@ -306,7 +317,12 @@ extension NativeDesktop {
             pointerLog.debug("Managed pointer down body=\(body, privacy: .public)")
             return
         }
-        guard let candidate = gesture else { return }
+        focusObservation.releasedPointer(on: Workspace.physicalScreen(at: point, in: physicalScreens), at: event.timestamp)
+        guard let candidate = gesture else {
+            // Activation can precede delivery of the mouse event, including a click on the macOS Dock.
+            if deferredPointerFocus || focusObservation.scopesPointerFocus { resamplePointerFocus() }
+            return
+        }
         let moved = hypot(point.x - candidate.origin.x, point.y - candidate.origin.y) > 3
         let detach = event.modifierFlags.contains(.option)
         if moved {
@@ -319,6 +335,11 @@ extension NativeDesktop {
         } else {
             finishGesture(candidate, at: point, detach: detach, moved: false)
         }
+    }
+
+    private func resamplePointerFocus() {
+        deferredPointerFocus = false
+        if !reportFocus() { queueScan(for: NSWorkspace.shared.frontmostApplication?.processIdentifier) }
     }
 
     func finishGesture(_ candidate: Gesture, at point: CGPoint, detach: Bool, moved: Bool) {
@@ -354,15 +375,18 @@ extension NativeDesktop {
             let eligible = candidate.bodyClick && !moved && active && !owned.contains(id)
             let releaseHit = eligible ? hit(at: point) : nil
             let sameBody = releaseHit.map { CFEqual($0.window, window.element) && isBody($0) } == true
-            let clicked = focusObservation.confirmBodyClick(id, releasedOn: sameBody ? id : nil, eligible: eligible,
-                                                          at: ProcessInfo.processInfo.systemUptime)
-            pointerLog.debug("Managed pointer up eligible=\(eligible, privacy: .public) sameBody=\(sameBody, privacy: .public) active=\(active, privacy: .public) nativeFocused=\(matchesFocus, privacy: .public) clicked=\(clicked, privacy: .public)")
-            if clicked {
+            let click = focusObservation.confirmClick(id, on: activeStripLocation?(id)?.screen,
+                                                     bodyWindow: sameBody ? id : nil, nativeFocused: active && matchesFocus,
+                                                     at: ProcessInfo.processInfo.systemUptime)
+            pointerLog.debug("Managed pointer up eligible=\(eligible, privacy: .public) sameBody=\(sameBody, privacy: .public) active=\(active, privacy: .public) nativeFocused=\(matchesFocus, privacy: .public) clicked=\(click == .body, privacy: .public)")
+            deferredPointerFocus = false
+            if click == .body {
                 let sameApp = candidate.sameApplication && ProcessInfo.processInfo.systemUptime - lastAppActivation > NativeFocusObservation.suppressionInterval
                 onEvent?(.bodyClicked(id, sameApplication: sameApp))
-            } else if active && matchesFocus {
-                focusObservation.clicked(id)
+            } else if click == .focused {
                 onEvent?(.focused(id))
+            } else {
+                resamplePointerFocus()
             }
         }
     }

@@ -74,7 +74,7 @@ extension NativeDesktop {
             guard let surface = surfaces.first(where: { !dimmers.contains($0.number) && $0.frame.contains(point) }), surface.layer == 0,
                   let hit = exposureWindow(at: point, surface: surface) else { return }
             if sample.id != hit, let index = order.firstIndex(of: sample.id) {
-                guard isActiveGroupWindow?(hit, screen.id) == true else { return }
+                guard activeStripLocation?(hit)?.screen == screen.id else { return }
                 firstCovered = min(firstCovered ?? index, index)
             }
         }
