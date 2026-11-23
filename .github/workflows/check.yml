@@ -11,4 +11,5 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - run: sh scripts/swiftpm test --disable-xctest
       - run: sh scripts/bundle

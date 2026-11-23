@@ -200,12 +200,7 @@ extension NativeDesktop {
             if name == kAXWindowMovedNotification, moveReadbacks.coversMoveNotification(id, dragging: draggingID) {
                 return
             }
-            if let actual = NativeAX.frame(element), let w = entries[id], !w.rect.approximatelyEquals(actual) {
-                entries[id]?.rect = actual
-                entries[id]?.lastRequestedSize = nil
-                entries[id]?.lastRequestedOrigin = nil
-            }
-            if draggingID != nil { clearSideDimming() } else { scheduleSideDimming() }
+            windowFrameChanged(NativeAX.frame(element), for: id)
             // Resizing is the AX transition delivered by applications entering or leaving full screen.
             if name == kAXWindowResizedNotification,
                NativeAX.flag(element, "AXFullScreen") == true || suspendedIDs.contains(id) { queueScan() }
@@ -217,6 +212,22 @@ extension NativeDesktop {
         default:
             break
         }
+    }
+
+    func windowFrameChanged(_ actual: CGRect?, for id: String) {
+        if let actual, let window = entries[id], !window.rect.approximatelyEquals(actual) {
+            entries[id]?.rect = actual
+            entries[id]?.lastRequestedSize = nil
+            entries[id]?.lastRequestedOrigin = nil
+        }
+        // AX can repeat a move or resize notification while the mouse is held still.
+        if let gesture, gesture.window == id {
+            guard let actual, gesture.startFrame.approximatelyEquals(actual) else {
+                clearSideDimming()
+                return
+            }
+        }
+        scheduleSideDimming()
     }
 
     func installMouseMonitor() {
@@ -354,16 +365,26 @@ extension NativeDesktop {
             let eligible = candidate.bodyClick && !moved && active && !owned.contains(id)
             let releaseHit = eligible ? hit(at: point) : nil
             let sameBody = releaseHit.map { CFEqual($0.window, window.element) && isBody($0) } == true
-            let clicked = focusObservation.confirmBodyClick(id, releasedOn: sameBody ? id : nil, eligible: eligible,
-                                                          at: ProcessInfo.processInfo.systemUptime)
-            pointerLog.debug("Managed pointer up eligible=\(eligible, privacy: .public) sameBody=\(sameBody, privacy: .public) active=\(active, privacy: .public) nativeFocused=\(matchesFocus, privacy: .public) clicked=\(clicked, privacy: .public)")
-            if clicked {
-                let sameApp = candidate.sameApplication && ProcessInfo.processInfo.systemUptime - lastAppActivation > NativeFocusObservation.suppressionInterval
-                onEvent?(.bodyClicked(id, sameApplication: sameApp))
-            } else if active && matchesFocus {
-                focusObservation.clicked(id)
-                onEvent?(.focused(id))
-            }
+            pointerLog.debug("Managed pointer up eligible=\(eligible, privacy: .public) sameBody=\(sameBody, privacy: .public) active=\(active, privacy: .public) nativeFocused=\(matchesFocus, privacy: .public)")
+            finishClick(candidate, sameBody: sameBody, nativeFocused: active && matchesFocus)
+        }
+    }
+
+    func finishClick(_ candidate: Gesture, sameBody: Bool, nativeFocused: Bool) {
+        let id = candidate.window
+        if nativeFocused, dimmedAround == id {
+            // Re-raising this selection (or its siblings) can put documents above their dimmers.
+            focusObservation.clicked(id)
+            checkExposureAfterActivation(id)
+            return
+        }
+        let time = ProcessInfo.processInfo.systemUptime
+        if focusObservation.confirmBodyClick(id, releasedOn: sameBody ? id : nil, eligible: candidate.bodyClick, at: time) {
+            let sameApp = candidate.sameApplication && time - lastAppActivation > NativeFocusObservation.suppressionInterval
+            onEvent?(.bodyClicked(id, sameApplication: sameApp))
+        } else if nativeFocused {
+            focusObservation.clicked(id)
+            onEvent?(.focused(id))
         }
     }
 }

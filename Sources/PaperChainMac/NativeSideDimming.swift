@@ -25,7 +25,7 @@ extension NativeDesktop {
     private func refreshSideDimming() {
         // The strip remembers its selection across app switches. Only dim when that
         // window actually has focus, including after switching to Settings or a floater.
-        guard dimSideWindows, running, trusted, draggingID == nil,
+        guard dimSideWindows, running, trusted,
               let app = NSWorkspace.shared.frontmostApplication,
               app.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
             clearSideDimming()
@@ -33,8 +33,13 @@ extension NativeDesktop {
         }
         let application = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(application, 0.18)
-        guard let focused = NativeAX.element(application, kAXFocusedWindowAttribute),
-              let id = id(of: focused), !suspendedIDs.contains(id), !owned.contains(id), !awaitingPlacement(id),
+        let focused = NativeAX.element(application, kAXFocusedWindowAttribute)
+        updateSideDimming(focused: focused.flatMap { id(of: $0) })
+    }
+
+    func updateSideDimming(focused id: String?) {
+        guard let id, gesture == nil || (gesture?.window == id && dimmedAround == id),
+              !suspendedIDs.contains(id), !owned.contains(id), !awaitingPlacement(id),
               let plan = sideDimmingPlan?(id) else {
             clearSideDimming()
             return

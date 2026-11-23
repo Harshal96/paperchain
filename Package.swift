@@ -17,6 +17,7 @@ var targets: [Target] = [
 products.append(.executable(name: "PaperChain", targets: ["PaperChainMac"]))
 targets.append(.target(name: "NativeAXMetadata"))
 targets.append(.executableTarget(name: "PaperChainMac", dependencies: ["ChainCore", "Decisions", "NativeAXMetadata"]))
+targets.append(.testTarget(name: "SideDimmingTests", dependencies: ["PaperChainMac"]))
 targets.append(.executableTarget(name: "NativeMetadataChecks", dependencies: ["NativeAXMetadata"], path: "Tests/NativeMetadataChecks"))
 #endif
 
