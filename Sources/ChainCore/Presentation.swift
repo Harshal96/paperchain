@@ -95,6 +95,18 @@ public struct Presentation {
         return gap < track.logicalIndices.count ? track.logicalIndices[gap] : (track.logicalIndices.last.map { $0 + 1 } ?? 0)
     }
 
+    /// Measure a drag from its starting column. Native placement can tuck a clipped window inside a display seam.
+    package func reorderGap(on screen: String, from source: Int, movingBy distance: Double) -> Int? {
+        guard distance.isFinite, let track = tracks[screen], track.bounds.width.isFinite, track.bounds.width > 0,
+              let sourceSlot = track.logicalIndices.firstIndex(of: source) else { return nil }
+        let pitch = Strip.stride(for: track.bounds.width, padding: padding)
+        let slot = Double(sourceSlot) + (distance / pitch).rounded()
+        let target = track.logicalIndices[Int(min(Double(track.logicalIndices.count - 1), max(0, slot)))]
+        guard target != source else { return nil }
+        // The insertion gap is measured before removing the dragged window.
+        return target < source ? target : target + 1
+    }
+
     public mutating func update(_ workspace: Workspace, available observed: Set<String>, at time: Double,
                                 activate: String? = nil, force: Bool = false, reduceMotion: Bool = false,
                                 windowPadding: Int = Strip.defaultPadding) -> [WindowCommand] {

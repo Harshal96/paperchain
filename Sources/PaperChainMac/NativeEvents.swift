@@ -416,7 +416,7 @@ extension NativeDesktop {
             entries[id]?.lastRequestedSize = nil
             originals.removeValue(forKey: id)
             lastDrop = (Double(point.x), Double(point.y), detach)
-            onEvent?(.dragged(id, Box(frame)))
+            onEvent?(.dragged(id, Box(frame), horizontalMovement: Double(frame.minX - start.minX)))
         } else if !suspendedIDs.contains(id) {
             let focused = NativeAX.element(AXUIElementCreateApplication(window.app.processIdentifier), kAXFocusedWindowAttribute)
             let matchesFocus = focused.map { CFEqual($0, window.element) } == true
