@@ -1,6 +1,7 @@
 import ChainCore
 
 func checkSideWindows() {
+    checkClosingRightNeighbor()
     var workspace = Workspace()
     workspace.syncScreens([wide, tall])
     for id in ["A", "B", "C", "D", "peer"] {
@@ -75,4 +76,45 @@ func checkSideWindows() {
     _ = presentation.update(workspace, available: available, at: 10)
     expect(presentation.sideWindows(whenFocusing: "mail", at: 10) == nil,
            "disabling a monitor clears its targets")
+}
+
+private func checkClosingRightNeighbor() {
+    let pid: Int32 = 42
+    func destruction(_ id: String?, observedWindow: Bool = false, applicationHint: Bool = false) -> NativeWindowDestruction {
+        NativeWindowDestruction(windowID: id, observedWindow: observedWindow, observerPID: pid) { _ in applicationHint }
+    }
+    expect(destruction(nil) == .ignore, "an unrelated control being destroyed does not trigger an inventory scan")
+    expect(destruction(nil, applicationHint: true) == .scan(pid), "an application hint reconciles only its owner")
+    expect(destruction(nil, observedWindow: true) == .scan(pid),
+           "an unmatched notification registered on a window reconciles its app even without pointer or focus changes")
+    var workspace = Workspace()
+    workspace.syncScreens([wide])
+    for id in ["A", "B", "C", "D"] {
+        workspace.discover(window(id), on: wide.id)
+        workspace.select(id)
+    }
+    workspace.select("C")
+    var presentation = Presentation()
+    let available = Set(workspace.windows.keys)
+    _ = presentation.update(workspace, available: available, at: 0)
+    expect(presentation.sideWindows(whenFocusing: "C", at: 0)?.windows == ["B", "D"],
+           "the penultimate window initially has a dimmed neighbor on each side")
+
+    // A native close arrives before the coalesced inventory update and without a focus event.
+    guard case let .close(closedID) = destruction("D", observedWindow: true) else {
+        fatalError("a recognized window destruction must close its entry")
+    }
+    workspace.close(closedID)
+    let commands = presentation.update(workspace, available: available, at: 1)
+    let right = Box(x: -796, y: 0, width: 796, height: 900)
+    expect(workspace.screens[wide.id]?.activeGroup?.selectedID == "C",
+           "closing the background tail keeps the original window selected")
+    expect(commands.contains(.place("C", right, wide.id)),
+           "the close itself places the surviving selection flush right")
+    expect(presentation.sideWindows(whenFocusing: "C", at: 1) == nil,
+           "the close itself clears the old dimming plan")
+    _ = presentation.update(workspace, available: available.subtracting(["D"]), at: 1.05)
+    _ = presentation.tick(at: 2)
+    expect(presentation.sideWindows(whenFocusing: "C", at: 2) == nil,
+           "inventory reconciliation leaves the new endpoint bright")
 }

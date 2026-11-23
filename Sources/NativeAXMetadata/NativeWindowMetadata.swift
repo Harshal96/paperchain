@@ -32,9 +32,12 @@ package struct NativeWindowMetadata {
                              single: (String) -> (AXError, CFTypeRef?)) -> Self {
         var item = Self()
         let (status, values) = multiple(attributes)
+        // AXWindows can still contain the handle during a close. Let inventory verify
+        // its removal instead of preserving it like a window whose AX calls timed out.
+        if status == .invalidUIElement { item.applicable = false; return item }
         guard status == .success || status == .notImplemented || status == .attributeUnsupported else { return item }
         let batch = status == .success ? values as? [AnyObject] : nil
-        func slot(_ field: Field, required: Bool = false) -> (AXError, CFTypeRef?) {
+        func readSlot(_ field: Field, required: Bool) -> (AXError, CFTypeRef?) {
             let index = field.rawValue
             guard let batch, batch.count == names.count else { return single(names[index]) }
             let value = batch[index]
@@ -50,6 +53,11 @@ package struct NativeWindowMetadata {
                 return (error, nil)
             }
             return (.success, value)
+        }
+        func slot(_ field: Field, required: Bool = false) -> (AXError, CFTypeRef?) {
+            let result = readSlot(field, required: required)
+            if result.0 == .invalidUIElement { item.applicable = false }
+            return result
         }
         func value(_ field: Field, required: Bool = false) -> CFTypeRef? {
             let (error, value) = slot(field, required: required)

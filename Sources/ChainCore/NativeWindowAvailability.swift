@@ -9,3 +9,14 @@ package enum NativeWindowAvailability {
         return previously ?? true
     }
 }
+
+package enum NativeWindowDestruction: Equatable {
+    case close(String), scan(Int32), ignore
+
+    package init(windowID: String?, observedWindow: Bool, observerPID: @autoclosure () -> Int32?,
+                 isApplication: (Int32) -> Bool) {
+        if let windowID { self = .close(windowID) }
+        else if let pid = observerPID(), observedWindow || isApplication(pid) { self = .scan(pid) }
+        else { self = .ignore }
+    }
+}
