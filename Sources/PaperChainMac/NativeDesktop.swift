@@ -57,6 +57,17 @@ final class NativeDesktop {
     var windows: [WindowInfo] {
         scanOrder.compactMap { focusObservation.awaitingFocus($0) ? nil : entries[$0]?.info }
     }
+    var floatingBundleIDs = Set<String>()
+
+    func floats(_ app: NSRunningApplication) -> Bool {
+        guard let bundleID = app.bundleIdentifier else { return false }
+        return floatingBundleIDs.contains(bundleID.lowercased())
+    }
+
+    var floatingWindowIDs: Set<String> {
+        Set(entries.compactMap { floats($0.value.app) ? $0.key : nil })
+    }
+
     var draggingID: String? { gesture?.window }
     var suspendedIDs = Set<String>()
     var focusObservation = NativeFocusObservation()

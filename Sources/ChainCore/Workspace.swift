@@ -195,8 +195,13 @@ public struct Workspace: Codable, Equatable {
 
     /// An omitted window may be minimized, occluded, on another Space, or temporarily inaccessible.
     /// Call close only after receiving independent evidence that its window was destroyed.
-    public mutating func rescan(_ observed: [(window: WindowInfo, screenID: String)]) {
-        for (window, screenID) in observed { discover(window, on: screenID) }
+    public mutating func rescan(_ observed: [(window: WindowInfo, screenID: String)], floating: Set<String> = []) {
+        // Keep known windows until any pending native release can restore them.
+        // A separate manual detach still applies if the app is managed again.
+        for id in floating { releaseMembership(of: id) }
+        for (window, screenID) in observed where !floating.contains(window.id) {
+            discover(window, on: screenID)
+        }
     }
 
     public mutating func discover(_ window: WindowInfo, on screenID: String) {
@@ -245,20 +250,14 @@ public struct Workspace: Codable, Equatable {
     }
 
     public mutating func close(_ windowID: String) {
-        placementPaused.remove(windowID)
-        removeMembership(of: windowID)
-        ownedIDs.remove(windowID)
+        releaseMembership(of: windowID)
         windows.removeValue(forKey: windowID)
         detached.remove(windowID)
-        releasedOnScreen.removeValue(forKey: windowID)
     }
 
     public mutating func detach(_ windowID: String) {
         guard windows[windowID] != nil else { return }
-        placementPaused.remove(windowID)
-        removeMembership(of: windowID)
-        ownedIDs.remove(windowID)
-        releasedOnScreen.removeValue(forKey: windowID)
+        releaseMembership(of: windowID)
         detached.insert(windowID)
     }
 
@@ -370,5 +369,11 @@ public struct Workspace: Codable, Equatable {
     private mutating func removeMembership(of id: String) {
         guard let owned = location(of: id), let index = groupIndex(owned.groupID, on: owned.screenID) else { return }
         screens[owned.screenID]?.groups[index].remove(owned)
+    }
+
+    private mutating func releaseMembership(of id: String) {
+        if ownedIDs.remove(id) != nil { removeMembership(of: id) }
+        placementPaused.remove(id)
+        releasedOnScreen.removeValue(forKey: id)
     }
 }

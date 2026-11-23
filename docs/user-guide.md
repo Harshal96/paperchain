@@ -26,6 +26,12 @@ Click a group to return to its windows. PaperChain minimizes windows in inactive
 | Float a window | Option-drag its title bar, or Control-click its dock icon and choose **Detach window**. Dragging it to a disabled display also takes it out of the strip. |
 | Bring a detached window back | Open the destination group, click **Group and dock options** (the circled ellipsis), and choose the window under **Attach window**. |
 
+## Keep an app outside the strip
+
+Open **Settings… → Floating apps** and choose **Add app…**. Pick the app from your Applications folder. The choice takes effect immediately for all its windows, including windows you open later. The app controls their position and size across group switches.
+
+Fellow floats by default so its compact meeting controls can hover over your other windows. This also applies to Fellow’s main window. To let PaperChain organize an app’s eligible windows again, click **Remove** next to its name.
+
 ## Adjust your displays
 
 Open **Settings…** from PaperChain’s linked-paper icon in the menu bar.

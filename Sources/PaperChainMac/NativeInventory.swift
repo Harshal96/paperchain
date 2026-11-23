@@ -247,7 +247,7 @@ extension NativeDesktop {
         // Even a suppressed AX focus event can change which native window is bright.
         defer { scheduleSideDimming() }
         guard trusted, let app = NSWorkspace.shared.frontmostApplication,
-              app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return true }
+              app.processIdentifier != ProcessInfo.processInfo.processIdentifier, !floats(app) else { return true }
         let pid = app.processIdentifier
         let application = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(application, 0.18)

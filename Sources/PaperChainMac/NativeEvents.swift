@@ -333,7 +333,7 @@ extension NativeDesktop {
                    NativeAX.applicability(windowElement) == true { queueScan(for: pid) }
                 return
             }
-            guard let rect = NativeAX.frame(windowElement) else { return }
+            guard let window = entries[id], !floats(window.app), let rect = NativeAX.frame(windowElement) else { return }
             if let target = moveReadbacks.remove(id),
                !NativePlacement.accepts(Box(rect), for: target.frame, on: target.screen.bounds,
                                         neighbors: neighboringDisplays[target.screen.id] ?? []) {
@@ -389,7 +389,7 @@ extension NativeDesktop {
             }
         }
         let id = candidate.window
-        guard let window = entries[id] else { return }
+        guard let window = entries[id], !floats(window.app) else { return }
         if candidate.closeButton {
             // Closing a background window need not change focus. Some apps omit or delay
             // the destroy notification, so reconcile just this app after the button fires.

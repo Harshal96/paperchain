@@ -8,6 +8,9 @@ final class Runtime: NSObject, PaperActions {
     static let shared = Runtime()
     static let defaults = ["Social Media", "Writing", "Work & Coding"]
     private static let windowPaddingKey = "appearance.windowPadding"
+    private static let floatingAppsKey = "windows.floatingApps"
+    @Published private(set) var floatingApps = UserDefaults.standard.dictionary(forKey: floatingAppsKey) as? [String: String]
+        ?? ["com.electron.fellow": "Fellow"]
     @Published private(set) var workspace = Workspace()
     @Published private(set) var availableWindowIDs = Set<String>()
     @Published private(set) var categories = defaults
@@ -26,6 +29,8 @@ final class Runtime: NSObject, PaperActions {
     @Published private(set) var isRegrouping = false
 
     private let desktop = NativeDesktop()
+    // Presentation can release a previously managed window as soon as AX can reach it again.
+    private var reachableWindowIDs = Set<String>()
     private var presentation = Presentation()
     private var dockFocus = DockFocusSelection()
     private lazy var docks = PaperDocks(actions: self)
@@ -65,6 +70,7 @@ final class Runtime: NSObject, PaperActions {
                   screen.isConnected, screen.enabled, screen.activeGroupID == owner.groupID else { return nil }
             return (screen.id, self.presentation.isClipped(id))
         }
+        desktop.floatingBundleIDs = Set(floatingApps.keys)
         desktop.start()
         ingest(force: true, selectFrontmost: true)
     }
@@ -167,7 +173,9 @@ final class Runtime: NSObject, PaperActions {
             if hasAccessibility, statusText == Self.missingAccessMessage { statusText = "" }
         }
         let inventory = desktop.trusted ? desktop.windows : []
-        let available = Set(inventory.map(\.id)).subtracting(desktop.suspendedIDs)
+        reachableWindowIDs = Set(inventory.map(\.id)).subtracting(desktop.suspendedIDs)
+        let floating = desktop.floatingWindowIDs
+        let available = reachableWindowIDs.subtracting(floating)
         let availabilityChanged = availableWindowIDs != available
         if availabilityChanged { availableWindowIDs = available }
         var next = workspace
@@ -177,15 +185,19 @@ final class Runtime: NSObject, PaperActions {
             guard available.contains(window.id), let screen = desktop.screenID(of: window.id) else { return nil }
             return (window, screen)
         }
-        next.rescan(observations)
-        for id in next.windows.keys where !available.contains(id) && desktop.isProcessGone(for: id) {
+        next.rescan(observations, floating: floating)
+        for id in next.windows.keys where !reachableWindowIDs.contains(id) && desktop.isProcessGone(for: id) {
             next.close(id)
         }
         let selected = selectWindow ?? (selectFrontmost ? desktop.focusedID : nil)
+        var activation: String?
         if let id = selected, available.contains(id), let owner = next.location(of: id),
-           next.screens[owner.screenID]?.enabled == true { next.select(id) }
+           next.screens[owner.screenID]?.enabled == true {
+            next.select(id)
+            if activateSelection { activation = id }
+        }
         let changed = next != workspace
-        install(next, activate: activateSelection ? selected : nil, force: reapplyLayout)
+        install(next, activate: activation, force: reapplyLayout)
         if (accessChanged || availabilityChanged) && !changed && !reapplyLayout { docks.refresh() }
     }
 
@@ -208,7 +220,7 @@ final class Runtime: NSObject, PaperActions {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: write)
         }
         let time = now
-        let commands = presentation.update(workspace, available: availableWindowIDs, at: time, activate: activate,
+        let commands = presentation.update(workspace, available: reachableWindowIDs, at: time, activate: activate,
                                            force: force, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                                            windowPadding: windowPadding)
         apply(commands)
@@ -264,6 +276,17 @@ final class Runtime: NSObject, PaperActions {
     }
 
     func requestAccessibility() { desktop.requestAccess() }
+
+    func setAppFloating(bundleID: String, name: String, floating: Bool) {
+        let key = bundleID.lowercased()
+        let value = floating ? name : nil
+        guard !key.isEmpty, floatingApps[key] != value else { return }
+        floatingApps[key] = value
+        UserDefaults.standard.set(floatingApps, forKey: Self.floatingAppsKey)
+        desktop.floatingBundleIDs = Set(floatingApps.keys)
+        if running { ingest() }
+    }
+
     func setWindowPadding(_ points: Int) {
         let padding = Strip.clampedPadding(points)
         guard padding != windowPadding else { return }
@@ -329,12 +352,16 @@ final class Runtime: NSObject, PaperActions {
 
     func icon(for window: String) -> NSImage? { desktop.icon(for: window) }
     func moveWindow(_ window: String, to group: String, screen: String, before: String?) {
-        guard let destination = workspace.screens[screen]?.groups.first(where: { $0.id == group }) else { return }
+        guard availableWindowIDs.contains(window),
+              let destination = workspace.screens[screen]?.groups.first(where: { $0.id == group }) else { return }
         let gap = before.flatMap { anchor in destination.columns.firstIndex { $0.contains(anchor) } } ?? destination.columns.count
         edit(activate: window) { $0.move(window, to: screen, group: group, at: gap) }
     }
     func detach(_ window: String) { edit { $0.detach(window) } }
-    func stack(_ window: String, with other: String) { edit(activate: window) { $0.stack(window, with: other) } }
+    func stack(_ window: String, with other: String) {
+        guard availableWindowIDs.contains(window), availableWindowIDs.contains(other) else { return }
+        edit(activate: window) { $0.stack(window, with: other) }
+    }
     func unstack(_ window: String) { edit(activate: window) { $0.unstack(window) } }
 
     func setCategories(_ names: [String]) {

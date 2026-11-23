@@ -2,6 +2,7 @@ import AppKit
 import ChainCore
 import Decisions
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 struct PaperMenu<A: PaperActions>: View {
@@ -34,6 +35,7 @@ struct PaperSettings<A: PaperActions>: View {
     @State private var categoryText = ""
     @State private var keyEntry = ""
     @State private var confirmingRemoval = false
+    @State private var invalidAppSelection = false
 
     private var screens: [ScreenState] {
         actions.workspace.screens.values.filter(\.isConnected).sorted {
@@ -69,6 +71,24 @@ struct PaperSettings<A: PaperActions>: View {
                 Toggle("Dim side windows", isOn: Binding(get: { actions.dimSideWindows },
                                                          set: { actions.setDimSideWindows($0) }))
                     .help("Dim other windows when the focused window has a visible column on each side.")
+            }
+            Section("Floating apps") {
+                Text("All windows from these apps stay outside the strip on every display.")
+                    .font(.callout).foregroundStyle(.secondary)
+                ForEach(actions.floatingApps.sorted { ($0.value, $0.key) < ($1.value, $1.key) }, id: \.key) { app in
+                    LabeledContent(app.value) {
+                        Button("Remove") {
+                            actions.setAppFloating(bundleID: app.key, name: app.value, floating: false)
+                        }
+                        .accessibilityLabel("Remove \(app.value) from floating apps")
+                    }
+                }
+                Button("Add app…", action: chooseFloatingApp)
+                    .alert("This app has no bundle identifier.", isPresented: $invalidAppSelection) {
+                        Button("OK") {}
+                    } message: {
+                        Text("Choose a macOS application with a bundle identifier so PaperChain can recognize its windows.")
+                    }
             }
             Section("Window access") {
                 if actions.hasAccessibility {
@@ -145,6 +165,23 @@ struct PaperSettings<A: PaperActions>: View {
     }
 
     private func syncCategories() { categoryText = actions.categories.joined(separator: "\n") }
+
+    private func chooseFloatingApp() {
+        let picker = NSOpenPanel()
+        picker.title = "Choose a floating app"
+        picker.prompt = "Add"
+        picker.allowedContentTypes = [.applicationBundle]
+        picker.directoryURL = FileManager.default.urls(for: .applicationDirectory, in: .localDomainMask).first
+        guard picker.runModal() == .OK, let url = picker.url else { return }
+        guard let bundle = Bundle(url: url), let id = bundle.bundleIdentifier, !id.isEmpty else {
+            invalidAppSelection = true
+            return
+        }
+        let name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String
+            ?? url.deletingPathExtension().lastPathComponent
+        actions.setAppFloating(bundleID: id, name: name, floating: true)
+    }
 
     private func saveKey() {
         let trimmed = keyEntry.trimmingCharacters(in: .whitespacesAndNewlines)
