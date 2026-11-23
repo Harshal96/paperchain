@@ -12,7 +12,7 @@ If you already have a copy in **Applications**, follow the [update steps](#updat
 
 ### If macOS can’t verify the developer
 
-Version 0.0.1 (build 10) uses a local signing certificate and lacks Apple notarization. If macOS says it can’t verify the developer, continue only if you trust the copy you downloaded from the PaperChain release. After trying to open the app, go to **System Settings → Privacy & Security**. Under **Security**, choose **Open Anyway** for the app and confirm when prompted. [Apple’s guide to opening Mac apps safely](https://support.apple.com/en-gb/102445)
+Version 0.0.1 (build 11) uses a local signing certificate and lacks Apple notarization. If macOS says it can’t verify the developer, continue only if you trust the copy you downloaded from the PaperChain release. After trying to open the app, go to **System Settings → Privacy & Security**. Under **Security**, choose **Open Anyway** for the app and confirm when prompted. [Apple’s guide to opening Mac apps safely](https://support.apple.com/en-gb/102445)
 
 ## Give PaperChain access to your windows
 

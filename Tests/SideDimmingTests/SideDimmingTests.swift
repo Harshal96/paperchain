@@ -7,7 +7,7 @@ struct SideDimmingTests {
     private let frame = CGRect(x: 300, y: 20, width: 600, height: 600)
 
     private func press(_ id: String, body: Bool = true) -> NativeDesktop.Gesture {
-        .init(window: id, origin: frame.origin, startFrame: frame, bodyClick: body, sameApplication: true)
+        .init(window: id, origin: frame.origin, startFrame: frame, bodyClick: body, closeButton: false, sameApplication: true)
     }
 
     @Test func refreshDuringStationaryPressKeepsDimmingUntilFocusChanges() {
@@ -65,5 +65,23 @@ struct SideDimmingTests {
             desktop.windowFrameChanged(changed, for: "center")
             #expect(desktop.dimmedAround == nil)
         }
+    }
+
+    @Test func dimmedFocusCannotClaimAClickFromAnotherDisplay() {
+        let desktop = NativeDesktop()
+        desktop.dimmedAround = "center"
+        desktop.activeStripLocation = { _ in ("right", false) }
+        desktop.focusObservation.clicked("leftWindow")
+        desktop.focusObservation.locatePress(at: CGPoint(x: 999, y: 200), time: 1,
+                                            displays: ["left": CGRect(x: 0, y: 0, width: 1000, height: 800)],
+                                            hit: ("right", false))
+        desktop.focusObservation.releasedPointer(on: "left", at: 1.1)
+        desktop.deferredPointerFocus = true
+        var emittedSelection = false
+        desktop.onEvent = { _ in emittedSelection = true }
+        desktop.finishClick(press("center"), sameBody: true, nativeFocused: true)
+        #expect(desktop.focusedID == "leftWindow")
+        #expect(!emittedSelection)
+        #expect(!desktop.deferredPointerFocus)
     }
 }

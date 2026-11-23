@@ -34,6 +34,7 @@ final class NativeDesktop {
         let origin: CGPoint
         let startFrame: CGRect
         let bodyClick: Bool
+        let closeButton: Bool
         let sameApplication: Bool
     }
 
@@ -49,7 +50,7 @@ final class NativeDesktop {
             else { clearSideDimming() }
         }
     }
-    var isActiveGroupWindow: ((_ id: String, _ screenID: String) -> Bool)?
+    var activeStripLocation: ((_ id: String) -> (screen: String, clipped: Bool)?)?
     var exposureCheck: ExposureCheck?
     private(set) var screens: [ScreenInfo] = []
     private(set) var trusted = false
@@ -98,8 +99,21 @@ final class NativeDesktop {
     var owned = Set<String>()
     var parkedAt: [String: TimeInterval] = [:]
     var userMinimized = Set<String>()
+    final class ObserverContext {
+        weak var desktop: NativeDesktop?
+        let observesWindow: Bool
+
+        init(_ desktop: NativeDesktop, observesWindow: Bool) {
+            self.desktop = desktop
+            self.observesWindow = observesWindow
+        }
+    }
+    lazy var appNotifications = ObserverContext(self, observesWindow: false)
+    lazy var windowNotifications = ObserverContext(self, observesWindow: true)
     var observers: [pid_t: AXObserver] = [:]
     var notificationTokens: [(NotificationCenter, NSObjectProtocol)] = []
+    var lastMouseDown: TimeInterval = 0
+    var deferredPointerFocus = false
     var mouseMonitor: Any?
     var gesture: Gesture?
     var skippedDuringGesture = false

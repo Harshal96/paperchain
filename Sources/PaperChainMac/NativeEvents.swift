@@ -8,9 +8,12 @@ private let pointerLog = Logger(subsystem: "app.paperchain.mac", category: "poin
 private func desktopNotification(_ observer: AXObserver, _ element: AXUIElement, _ name: CFString,
                                  _ context: UnsafeMutableRawPointer?) {
     guard let context else { return }
-    let manager = Unmanaged<NativeDesktop>.fromOpaque(context).takeUnretainedValue()
+    let registration = Unmanaged<NativeDesktop.ObserverContext>.fromOpaque(context).takeUnretainedValue()
     // Each observer's source is installed exclusively on the main run loop.
-    MainActor.assumeIsolated { manager.received(name as String, element: element) }
+    MainActor.assumeIsolated {
+        registration.desktop?.received(name as String, element: element, from: observer,
+                                       observedWindow: registration.observesWindow)
+    }
 }
 
 extension NativeDesktop {
@@ -80,7 +83,7 @@ extension NativeDesktop {
         guard observers[pid] == nil else { return }
         var observer: AXObserver?
         guard AXObserverCreate(pid, desktopNotification, &observer) == .success, let observer else { return }
-        let context = Unmanaged.passUnretained(self).toOpaque()
+        let context = Unmanaged.passUnretained(appNotifications).toOpaque()
         for name in [kAXWindowCreatedNotification, kAXUIElementDestroyedNotification, kAXTitleChangedNotification,
                      kAXFocusedWindowChangedNotification, kAXMainWindowChangedNotification, kAXWindowMovedNotification,
                      kAXWindowResizedNotification, kAXWindowMiniaturizedNotification, kAXWindowDeminiaturizedNotification] {
@@ -88,6 +91,16 @@ extension NativeDesktop {
         }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
         observers[pid] = observer
+        // Reattach when Accessibility returns and inventory still has the old windows.
+        for window in entries.values where window.app.processIdentifier == pid {
+            observeWindowDestruction(window.element, for: pid)
+        }
+    }
+
+    func observeWindowDestruction(_ element: AXUIElement, for pid: pid_t) {
+        guard let observer = observers[pid] else { return }
+        AXObserverAddNotification(observer, element, kAXUIElementDestroyedNotification as CFString,
+                                  Unmanaged.passUnretained(windowNotifications).toOpaque())
     }
 
     func removeObservers() {
@@ -140,16 +153,26 @@ extension NativeDesktop {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: check)
     }
 
-    func received(_ name: String, element: AXUIElement) {
+    func received(_ name: String, element: AXUIElement, from observer: AXObserver, observedWindow: Bool) {
         guard running, trusted else { return }
         switch name {
         case kAXFocusedWindowChangedNotification, kAXMainWindowChangedNotification:
             if !reportFocus() { queueScan(for: NSWorkspace.shared.frontmostApplication?.processIdentifier) }
         case kAXUIElementDestroyedNotification:
-            if let id = id(of: element) {
+            let change = NativeWindowDestruction(windowID: id(of: element), observedWindow: observedWindow,
+                                                 observerPID: observers.first(where: { CFEqual($0.value, observer) })?.key) {
+                CFEqual(element, AXUIElementCreateApplication($0))
+            }
+            switch change {
+            case let .close(id):
                 forgetWindow(id)
                 onEvent?(.closed(id))
                 onEvent?(.windowsChanged)
+            case let .scan(pid):
+                // The destroyed element cannot be queried. Verify the observed app's inventory.
+                queueScan(for: pid)
+            case .ignore:
+                break
             }
         case kAXWindowMiniaturizedNotification:
             guard let id = id(of: element) else { queueScan(for: appPID(of: element)); return }
@@ -232,20 +255,22 @@ extension NativeDesktop {
 
     func installMouseMonitor() {
         guard mouseMonitor == nil else { return }
+        lastMouseDown = ProcessInfo.processInfo.systemUptime
         mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
             MainActor.assumeIsolated { self?.handleMouse(event) }
         }
         // A drag can finish on our own panel; global monitors only receive other apps' events.
         localMouseUp = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
             MainActor.assumeIsolated {
-                if event.type == .leftMouseDown { self?.beginPointerPress() }
+                if event.type == .leftMouseDown { self?.beginPointerPress(at: event.timestamp) }
                 else { self?.handleMouse(event) }
             }
             return event
         }
     }
 
-    private func beginPointerPress() {
+    private func beginPointerPress(at time: Double) {
+        lastMouseDown = time
         cancelExposureCheck()
         gesture = nil
         deferredActivation = nil
@@ -290,10 +315,19 @@ extension NativeDesktop {
     func handleMouse(_ event: NSEvent) {
         guard running, trusted, let point = event.cgEvent?.location else { return }
         if event.type == .leftMouseDown {
-            beginPointerPress()
-            guard let hit = hit(at: point) else { return }
+            beginPointerPress(at: event.timestamp)
+            let hit = hit(at: point)
+            let id = hit.flatMap { self.id(of: $0.window) }
+            if let element = hit?.element, let role = NativeAX.attribute(element, kAXRoleAttribute) as? String,
+               [kAXDockItemRole, kAXMenuBarItemRole, kAXMenuItemRole, kAXMenuRole].contains(role) {
+                // A Dock or Window menu item can intentionally activate a window on another monitor.
+                return
+            }
+            focusObservation.locatePress(at: point, time: event.timestamp, displays: physicalScreens,
+                                         hit: id.flatMap { activeStripLocation?($0) })
+            guard let hit else { return }
             let windowElement = hit.window
-            guard let id = id(of: windowElement) else {
+            guard let id else {
                 // A direct click can be the first observation for apps that omit the create event.
                 if let pid = appPID(of: windowElement), NSRunningApplication(processIdentifier: pid)?.activationPolicy == .regular,
                    NativeAX.applicability(windowElement) == true { queueScan(for: pid) }
@@ -313,14 +347,22 @@ extension NativeDesktop {
             let body = plain && event.clickCount <= 1 && isBody(hit)
             let sameApp = focusedID.flatMap { entries[$0]?.app.processIdentifier } == entries[id]?.app.processIdentifier &&
                 ProcessInfo.processInfo.systemUptime - lastAppActivation > NativeFocusObservation.suppressionInterval
-            gesture = Gesture(window: id, origin: point, startFrame: rect, bodyClick: body, sameApplication: sameApp)
+            let closeButton = !body && NativeAX.element(windowElement, kAXCloseButtonAttribute)
+                .map { CFEqual($0, hit.element) } == true
+            gesture = Gesture(window: id, origin: point, startFrame: rect, bodyClick: body, closeButton: closeButton,
+                              sameApplication: sameApp)
             pointerLog.debug("Managed pointer down body=\(body, privacy: .public)")
             return
         }
-        guard let candidate = gesture else { return }
+        focusObservation.releasedPointer(on: Workspace.physicalScreen(at: point, in: physicalScreens), at: event.timestamp)
+        guard let candidate = gesture else {
+            // Activation can precede delivery of the mouse event, including a click on the macOS Dock.
+            if deferredPointerFocus || focusObservation.scopesPointerFocus { resamplePointerFocus() }
+            return
+        }
         let moved = hypot(point.x - candidate.origin.x, point.y - candidate.origin.y) > 3
         let detach = event.modifierFlags.contains(.option)
-        if moved {
+        if moved && !candidate.closeButton {
             // Some apps commit their final frame on the next run-loop iteration.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.065) { [weak self] in
                 guard let self, self.gesture?.window == candidate.window,
@@ -328,8 +370,13 @@ extension NativeDesktop {
                 self.finishGesture(candidate, at: point, detach: detach, moved: true)
             }
         } else {
-            finishGesture(candidate, at: point, detach: detach, moved: false)
+            finishGesture(candidate, at: point, detach: detach, moved: moved)
         }
+    }
+
+    private func resamplePointerFocus() {
+        deferredPointerFocus = false
+        if !reportFocus() { queueScan(for: NSWorkspace.shared.frontmostApplication?.processIdentifier) }
     }
 
     func finishGesture(_ candidate: Gesture, at point: CGPoint, detach: Bool, moved: Bool) {
@@ -341,9 +388,21 @@ extension NativeDesktop {
                 onEvent?(.reconcilePlacement)
             }
         }
-        guard let window = entries[candidate.window],
-              let frame = moved ? NativeAX.frame(window.element) : candidate.startFrame else { return }
         let id = candidate.window
+        guard let window = entries[id] else { return }
+        if candidate.closeButton {
+            // Closing a background window need not change focus. Some apps omit or delay
+            // the destroy notification, so reconcile just this app after the button fires.
+            let pid = window.app.processIdentifier
+            queueScan(for: pid)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                guard let self, self.running, self.trusted, let entry = self.entries[id],
+                      CFEqual(entry.element, window.element) else { return }
+                self.queueScan(for: pid)
+            }
+            return
+        }
+        guard let frame = moved ? NativeAX.frame(window.element) : candidate.startFrame else { return }
         let frameMoved = hypot(frame.minX - candidate.startFrame.minX, frame.minY - candidate.startFrame.minY) > 2
         let start = candidate.startFrame
         let resizedFromLeft = abs(start.width - frame.width) > 2 && abs(start.maxX - frame.maxX) <= 2 &&
@@ -372,19 +431,23 @@ extension NativeDesktop {
 
     func finishClick(_ candidate: Gesture, sameBody: Bool, nativeFocused: Bool) {
         let id = candidate.window
-        if nativeFocused, dimmedAround == id {
-            // Re-raising this selection (or its siblings) can put documents above their dimmers.
-            focusObservation.clicked(id)
-            checkExposureAfterActivation(id)
-            return
-        }
+        let keepsDimming = nativeFocused && dimmedAround == id
         let time = ProcessInfo.processInfo.systemUptime
-        if focusObservation.confirmBodyClick(id, releasedOn: sameBody ? id : nil, eligible: candidate.bodyClick, at: time) {
+        // The center already has focus. Validate its display without requesting a body-click activation.
+        let click = focusObservation.confirmClick(id, on: activeStripLocation?(id)?.screen,
+                                                 bodyWindow: sameBody && !keepsDimming ? id : nil,
+                                                 nativeFocused: nativeFocused, at: time)
+        deferredPointerFocus = false
+        switch click {
+        case .body:
             let sameApp = candidate.sameApplication && time - lastAppActivation > NativeFocusObservation.suppressionInterval
             onEvent?(.bodyClicked(id, sameApplication: sameApp))
-        } else if nativeFocused {
-            focusObservation.clicked(id)
+        case .focused where keepsDimming:
+            checkExposureAfterActivation(id)
+        case .focused:
             onEvent?(.focused(id))
+        case nil:
+            resamplePointerFocus()
         }
     }
 }
