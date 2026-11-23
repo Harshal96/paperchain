@@ -237,4 +237,42 @@ private func checkClickedNeighborDuringMotion() {
     click("Z", at: 4)
     checkFrame(4.03, selected: "Z", exposed: ["Z", "B", "C"])
     checkFrame(4.4, selected: "Z", exposed: ["Z", "B"])
+
+    click("B", at: 5)
+    checkFrame(5.4, selected: "B", exposed: ["Z", "B", "C"])
+    // A control in the left preview can gain focus at mouse-up, gain it later, or open the right preview.
+    for (immediate, destination, sameApp) in [(true, "Z", true), (false, "Z", false), (false, "C", true)] {
+        var focus = NativeFocusObservation()
+        var view = presentation
+        var model = workspace
+        var surface = desk
+        focus.clicked("B")
+        focus.beganClick()
+        view.cancelActivation()
+        let result = focus.confirmClick("Z", on: left.id, bodyWindow: nil, nativeFocused: immediate, at: 6)
+        if immediate {
+            precondition(result == .focused)
+        } else {
+            precondition(result == nil && focus.focusedID == "B", "A control click must wait for native focus")
+            precondition(focus.observe(destination, at: 6.01, suppressed: false, dragging: false, userInput: false))
+        }
+        surface.consume([.raise(destination, activate: true)], screens: model.screens)
+        view.observedFocus(destination, sameApplication: sameApp)
+        model.select(destination)
+        func checkControlFocus(_ commands: [WindowCommand]) {
+            for case .raise(_, activate: true) in commands {
+                preconditionFailure("The strip requested activation after a native control click")
+            }
+            surface.consume(commands, screens: model.screens)
+            precondition(surface.layers.last(where: chain.contains) == destination, "The old center covered native focus")
+        }
+        let firstFrame = view.update(model, available: available, at: 6.01)
+        if sameApp {
+            for case let .raise(id, _) in firstFrame {
+                precondition(id == destination, "A control click re-raised a correctly layered sibling")
+            }
+        }
+        checkControlFocus(firstFrame)
+        for frame in 1...36 { checkControlFocus(view.tick(at: 6.01 + Double(frame) / 120)) }
+    }
 }

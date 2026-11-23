@@ -7,7 +7,8 @@ import ChainCore
 final class NativeDesktop {
     enum Event {
         case windowsChanged, screensChanged, reconcilePlacement
-        case pointerDown, bodyClicked(String, sameApplication: Bool), focused(String), restored(String), closed(String), cannotTile(String)
+        case pointerDown, bodyClicked(String, sameApplication: Bool), focused(String, sameApplication: Bool)
+        case restored(String), closed(String), cannotTile(String)
         case dragged(String, Box)
         case permissionChanged(Bool)
     }

@@ -69,12 +69,13 @@ package struct NativeFocusObservation {
             suppressedFocus = id
             return false
         }
-        if let click = bodyClick, time < click.until, click.target != id, !newWindow, !userInput { return false }
-        if newWindow || userInput { bodyClick = nil }
         if suppressed && !userInput && !newWindow {
+            // Remember a manager-generated focus report even while a body click protects its target.
             if (raisedUntil[id] ?? 0) > time { suppressedFocus = id }
             return false
         }
+        if let click = bodyClick, time < click.until, click.target != id, !newWindow, !userInput { return false }
+        if newWindow || userInput { bodyClick = nil }
         if suppressedFocus == id && !userInput && !newWindow { return false }
         suppressedFocus = nil
         guard focusedID != id else { return false }

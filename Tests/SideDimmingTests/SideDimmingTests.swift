@@ -38,7 +38,7 @@ struct SideDimmingTests {
         var selected: [String] = []
         desktop.onEvent = { event in
             switch event {
-            case let .bodyClicked(id, _), let .focused(id): selected.append(id)
+            case let .bodyClicked(id, _), let .focused(id, _): selected.append(id)
             default: break
             }
         }
