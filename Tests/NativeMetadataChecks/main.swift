@@ -63,4 +63,14 @@ precondition(legacy.frame == snapshot.frame && legacy.fullScreen == false &&
              legacyReads.count == 8 && Set(legacyReads) == Set(attributes.keys))
 let (timedOut, timeoutReads) = read(status: .cannotComplete)
 precondition(timedOut.applicable == nil && timeoutReads.isEmpty)
+precondition(read(status: .invalidUIElement).0.applicable == false,
+             "a closed window still listed in AXWindows must not be preserved as temporarily unreadable")
+precondition(read([kAXRoleAttribute: errorSlot(.invalidUIElement)]).0.applicable == false,
+             "a stale AX role is a confirmed ineligible window")
+for flag in [kAXMinimizedAttribute, "AXFullScreen"] {
+    precondition(read([flag: errorSlot(.invalidUIElement)]).0.applicable == false,
+                 "invalid flag in an otherwise usable AX batch confirms the window is gone")
+    precondition(read(status: .notImplemented, singleStatus: [flag: .invalidUIElement]).0.applicable == false,
+                 "an invalid flag on the legacy AX path confirms the window is gone")
+}
 print("Native AX metadata checks passed (one batch, eight fallback attributes, partial results and timeouts).")
