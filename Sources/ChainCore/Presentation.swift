@@ -71,6 +71,8 @@ public struct Presentation {
         return order
     }
 
+    package func isClipped(_ id: String) -> Bool { edgeWindows.contains(id) }
+
     /// Shade peers only when the settled, focused column has visible columns on both sides.
     public func sideWindows(whenFocusing id: String, at time: Double) -> (bounds: Box, windows: [String])? {
         guard let focus = placements[id], let bounds = tracks[focus.screen]?.bounds else { return nil }

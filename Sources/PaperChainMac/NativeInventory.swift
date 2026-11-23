@@ -262,9 +262,15 @@ extension NativeDesktop {
         // Command-Tab can follow an automatic raise. Query only the age of the
         // last key press (never its contents) to recognize intervening user input.
         let inputBaseline = focusObservation.inputBaseline(at: now, lastManagerFocus: lastManagerFocus)
-        let userKeyAfterRaise = inputBaseline > 0 &&
-            CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < now - inputBaseline
-        if focusObservation.observe(id, at: now, suppressed: now < suppressFocusUntil,
+        let keyAge = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+        let downAge = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .leftMouseDown)
+        if NSEvent.pressedMouseButtons & 1 != 0 ||
+            NativeFocusObservation.awaitingMouseDown(at: now, handledThrough: lastMouseDown, downAge: downAge, keyAge: keyAge) {
+            deferredPointerFocus = true
+            return true
+        }
+        let userKeyAfterRaise = inputBaseline > 0 && keyAge < now - inputBaseline
+        if focusObservation.observe(id, on: activeStripLocation?(id)?.screen, at: now, suppressed: now < suppressFocusUntil,
                                     dragging: draggingID != nil, userInput: userKeyAfterRaise) {
             if deferredActivation != id { deferredActivation = nil }
             onEvent?(.focused(id))
