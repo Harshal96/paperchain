@@ -17,7 +17,8 @@ extension Workspace {
 
     /// An observed frame never calls this method. Only mouse-up after a physical window drag does.
     public mutating func drop(_ window: String, x: Double, y: Double, float: Bool,
-                              fallbackScreen: String?, presentation: Presentation, at time: Double) {
+                              fallbackScreen: String?, presentation: Presentation, at time: Double,
+                              horizontalMovement: Double? = nil) {
         if float {
             detach(window)
             return
@@ -27,9 +28,16 @@ extension Workspace {
             return $0.isConnected && x >= b.x && x < b.x + b.width && y >= b.y && y < b.y + b.height
         }?.id ?? fallbackScreen
         guard let destination, let screen = screens[destination], screen.isConnected else { return }
+        let source = location(of: window)
+        if let horizontalMovement, !placementPaused.contains(window), let source,
+           source.screenID == destination, source.groupID == screen.activeGroupID {
+            let gap = presentation.reorderGap(on: destination, from: source.column, movingBy: horizontalMovement)
+            move(window, to: destination, at: gap)
+            return
+        }
         let gap = presentation.gap(on: destination, atX: x, time: time)
         // Importing onto a portrait screen fills a half-empty stack first.
-        let fillRow = screen.info.bounds.height > screen.info.bounds.width && location(of: window)?.screenID != destination
+        let fillRow = screen.info.bounds.height > screen.info.bounds.width && source?.screenID != destination
         move(window, to: destination, at: fillRow ? nil : gap)
     }
 }

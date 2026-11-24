@@ -120,7 +120,7 @@ final class Runtime: NSObject, PaperActions {
             selectNativeWindow(id, activate: true)
         case let .restored(id):
             ingest(selectWindow: id, activateSelection: true)
-        case let .dragged(id, frame):
+        case let .dragged(id, frame, horizontalMovement):
             dockFocus = DockFocusSelection()
             let drop = desktop.lastDrop
             let x = drop?.x ?? (frame.x + frame.width / 2)
@@ -131,7 +131,7 @@ final class Runtime: NSObject, PaperActions {
             let view = presentation, time = now
             edit(activate: id, force: true) {
                 $0.drop(id, x: x, y: y, float: drop?.detach == true, fallbackScreen: target,
-                        presentation: view, at: time)
+                        presentation: view, at: time, horizontalMovement: horizontalMovement)
             }
         }
     }
