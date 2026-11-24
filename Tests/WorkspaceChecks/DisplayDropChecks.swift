@@ -46,6 +46,7 @@ func checkDisplayDrops() {
            "the exposure point must be at the center of the visible 140-point slice")
 
     checkReorderingByWindowFrame()
+    checkDropWithRoundedNativeSize()
     checkVerticalDragAtDisplaySeam()
 }
 
@@ -97,4 +98,49 @@ private func checkVerticalDragAtDisplaySeam() {
                horizontalMovement: -1)
     expect(strip.location(of: "A")?.screenID == neighbor.id,
            "a release on another display transfers ownership even when the frame stays on the source display")
+}
+
+private func checkDropWithRoundedNativeSize() {
+    let display = ScreenInfo(id: "wide", name: "Wide", bounds: Box(x: 0, y: 30, width: 2560, height: 1410))
+    var strip = Workspace()
+    strip.syncScreens([display])
+    for id in ["A", "B"] { strip.discover(window(id), on: display.id) }
+    let available: Set<String> = ["A", "B"]
+    var layout = Presentation()
+    _ = layout.update(strip, available: available, at: 0, windowPadding: 4)
+
+    // This app already uses its closest representable size when the user picks it up.
+    var actual = Box(x: 670, y: 506, width: 1276, height: 1407)
+    strip.drop("A", x: 1700, y: 520, float: false, fallbackScreen: display.id,
+               presentation: layout, at: 1, horizontalMovement: actual.x)
+    let target = Box(x: 1282, y: 30, width: 1278, height: 1410)
+    let commands = layout.update(strip, available: available, at: 1, windowPadding: 4)
+    expect(commands.contains(.place("A", target, display.id)), "the drop should place A in the right slot")
+
+    var sequence = NativeResizeSequence()
+    var writes = 0
+    var action = NativeResizeSequence.Action.wait
+    sampling: for _ in 0..<16 {
+        action = sequence.next(measured: actual, target: target, display: display.bounds, neighbors: [])
+        switch action {
+        case let .anchor(frame), let .position(frame):
+            actual.x = frame.x
+            actual.y = frame.y
+        case .resize:
+            // The app acknowledges the write and keeps its rounded size.
+            writes += 1
+        case .wait: continue
+        case .settled, .refused: break sampling
+        }
+    }
+    expect(action == .settled && writes == 2 && actual.x == target.x && actual.y == target.y,
+           "a dropped window two points narrow and three points short must settle at the requested origin")
+
+    strip.select("B")
+    strip.rescan([(window("A"), display.id), (window("B"), display.id)])
+    let afterClick = layout.update(strip, available: available, at: 2, force: true, windowPadding: 4)
+    expect(strip.screens[display.id]?.activeGroup?.orderedIDs == ["B", "A"]
+           && afterClick.contains(.place("A", target, display.id))
+           && layout.exposure(for: "B", at: 2) == ["A", "B"],
+           "focusing the neighbor after a drop must leave the moved window exposed in its new slot")
 }

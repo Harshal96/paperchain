@@ -104,10 +104,22 @@ struct NativeWindowNumber {
     }
 }
 
+extension CGPoint {
+    func approximatelyEquals(_ other: CGPoint, tolerance: CGFloat = 1) -> Bool {
+        abs(x - other.x) <= tolerance && abs(y - other.y) <= tolerance
+    }
+}
+
+extension CGSize {
+    func approximatelyEquals(_ other: CGSize, tolerance: CGFloat = 1) -> Bool {
+        abs(width - other.width) <= tolerance && abs(height - other.height) <= tolerance
+    }
+}
+
 extension CGRect {
     func approximatelyEquals(_ other: CGRect, tolerance: CGFloat = 1) -> Bool {
-        abs(minX - other.minX) <= tolerance && abs(minY - other.minY) <= tolerance &&
-        abs(width - other.width) <= tolerance && abs(height - other.height) <= tolerance
+        origin.approximatelyEquals(other.origin, tolerance: tolerance) &&
+        size.approximatelyEquals(other.size, tolerance: tolerance)
     }
 
     func bounded(in limits: CGRect) -> CGRect {

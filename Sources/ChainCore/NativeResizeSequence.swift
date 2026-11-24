@@ -93,17 +93,17 @@ public struct NativeResizeSequence {
         return .resize
     }
 
-    /// A cell-based app can stop between points we can request. Two independent
-    /// attempts must yield the same size, and each missed dimension must have
-    /// moved closer to the target than it was before the first write.
+    /// A cell-based app can already be at its closest size when a drag starts.
+    /// After two consistent resize attempts, allow up to four points of rounding
+    /// per dimension. A larger mismatch still needs evidence of progress.
     private func negotiated(_ measured: Box, _ target: Box) -> Bool {
         guard awaiting != .resize, let original = beforeFirstResize, let first = beforeSecondResize,
               abs(first.width - measured.width) <= 1, abs(first.height - measured.height) <= 1 else { return false }
-        func progressed(_ actual: Double, from start: Double, toward wanted: Double) -> Bool {
+        func fitsOrProgressed(_ actual: Double, from start: Double, toward wanted: Double) -> Bool {
             let error = abs(wanted - actual)
-            return error <= 1 || error + 1 < abs(wanted - start)
+            return error <= 4 || error + 1 < abs(wanted - start)
         }
-        return progressed(measured.width, from: original.width, toward: target.width)
-            && progressed(measured.height, from: original.height, toward: target.height)
+        return fitsOrProgressed(measured.width, from: original.width, toward: target.width)
+            && fitsOrProgressed(measured.height, from: original.height, toward: target.height)
     }
 }

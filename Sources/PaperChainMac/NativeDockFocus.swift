@@ -13,7 +13,7 @@ extension NativeDesktop {
         // The first placement of this retry must verify the application's real
         // geometry before the strip resumes normal layer ordering.
         if !awaitingPlacement(id) {
-            entries[id]?.lastRequestedSize = nil
+            entries[id]?.acceptedSize = nil
             entries[id]?.lastRequestedOrigin = nil
         }
         return true

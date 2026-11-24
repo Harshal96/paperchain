@@ -102,12 +102,9 @@ extension NativeDesktop {
                                       title: seed.title, bundleID: app.bundleIdentifier)
                 var entry = Window(info: info, app: app, element: seed.element, identifier: identifier,
                                    axIdentifier: rawKey, quartzIdentifier: quartzKey,
-                                   rect: seed.frame, lastRequestedSize: previous?.lastRequestedSize,
+                                   rect: seed.frame, acceptedSize: previous?.acceptedSize,
                                    lastRequestedOrigin: previous?.lastRequestedOrigin)
-                if let previous, !previous.rect.approximatelyEquals(seed.frame) {
-                    entry.lastRequestedSize = nil
-                    entry.lastRequestedOrigin = nil
-                }
+                entry.observeFrame(seed.frame)
                 // A browser tab or editor title can change hundreds of times in one launch.
                 if uniqueTitle, aliases[titleKey] != id {
                     aliases = aliases.filter { $0.value != id }

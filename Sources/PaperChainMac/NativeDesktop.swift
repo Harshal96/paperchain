@@ -21,8 +21,31 @@ final class NativeDesktop {
         let axIdentifier: String?
         let quartzIdentifier: String?
         var rect: CGRect
-        var lastRequestedSize: CGSize?
+        var acceptedSize: (requested: CGSize, measured: CGSize)?
         var lastRequestedOrigin: CGPoint?
+
+        mutating func observeFrame(_ actual: CGRect) {
+            rect = actual
+            // Grid-sized windows can settle between requested sizes. Compare to the
+            // accepted measurement so subpoint AX readings cannot accumulate into a resize.
+            if let acceptedSize, !acceptedSize.measured.approximatelyEquals(actual.size) {
+                self.acceptedSize = nil
+                lastRequestedOrigin = nil
+            }
+            if let origin = lastRequestedOrigin, !origin.approximatelyEquals(actual.origin) {
+                lastRequestedOrigin = nil
+            }
+        }
+
+        func needsResize(to target: CGRect) -> Bool {
+            acceptedSize?.requested != target.size && !NativeResizeSequence.sizeMatches(Box(rect), target: Box(target))
+        }
+
+        mutating func acceptsPlacement(_ actual: CGRect, at desired: CGRect, on screen: ScreenInfo, neighbors: [Box]) -> Bool {
+            observeFrame(actual)
+            return !needsResize(to: desired) &&
+                NativePlacement.accepts(Box(actual), for: Box(desired), on: screen.bounds, neighbors: neighbors)
+        }
     }
 
     struct Original {
@@ -345,7 +368,7 @@ final class NativeDesktop {
         settlingPlacements.removeAll()
         if retryRestores, trusted { retryUnconfirmedRestores() }
         for id in Array(entries.keys) {
-            entries[id]?.lastRequestedSize = nil
+            entries[id]?.acceptedSize = nil
             entries[id]?.lastRequestedOrigin = nil
         }
     }
@@ -387,7 +410,7 @@ final class NativeDesktop {
         // have completed before AX delivers the matching notification.
         if owned.contains(id), !unpark(id, intent: .show) { return }
         rememberFrame(id, window)
-        if window.lastRequestedSize != rect.size, !NativeResizeSequence.sizeMatches(Box(window.rect), target: frame) {
+        if window.needsResize(to: rect) {
             beginResize(id, desired: rect, on: target)
             return
         }
@@ -408,7 +431,7 @@ final class NativeDesktop {
         guard let delay = settlement.retry.nextDelay() else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self, self.running, self.trusted, self.settlingPlacements[id] === settlement,
-                  let window = self.entries[id] else { return }
+                  var window = self.entries[id] else { return }
             let screen = settlement.screen
             guard self.draggingID != id, !self.owned.contains(id), !self.suspendedIDs.contains(id),
                   self.screens.contains(screen) else {
@@ -419,8 +442,11 @@ final class NativeDesktop {
             let actual = NativeAX.frame(window.element)
             let minimized = NativeAX.flag(window.element, kAXMinimizedAttribute)
             let targetChanged = desired != settlement.lastWritten
-            if let actual, !targetChanged, minimized == false, self.placed(actual, at: desired, on: screen) {
-                self.entries[id]?.rect = actual
+            let accepted = actual.map {
+                window.acceptsPlacement($0, at: desired, on: screen, neighbors: self.neighboringDisplays[screen.id] ?? [])
+            } ?? false
+            self.entries[id] = window
+            if accepted, !targetChanged, minimized == false {
                 self.settlingPlacements.removeValue(forKey: id)
                 self.onEvent?(.reconcilePlacement)
                 if self.deferredActivation == id { self.deferredActivation = nil; self.raise(id, activate: true) }
@@ -429,13 +455,11 @@ final class NativeDesktop {
             if targetChanged || settlement.retry.shouldReissue {
                 if targetChanged { settlement.retry = NativePlacementRetry() }
                 settlement.beforeRetry = actual
-                if let actual, minimized == false {
-                    if !NativeResizeSequence.sizeMatches(Box(actual), target: Box(desired),
-                                                        afterWrite: window.lastRequestedSize == desired.size) {
+                if actual != nil, minimized == false {
+                    if window.needsResize(to: desired) {
                         self.beginResize(id, desired: desired, on: screen)
                         return
                     }
-                    self.entries[id]?.rect = actual
                     self.entries[id]?.lastRequestedOrigin = nil
                     settlement.write = self.writeFrame(desired, for: id, on: screen, purpose: .strip)
                 }
@@ -481,8 +505,8 @@ final class NativeDesktop {
         let neighbors = neighboringDisplays[screen.id] ?? []
         var actual = window.rect
         write.before = actual
-        let originOnly = window.lastRequestedSize == desired.size && window.lastRequestedOrigin != nil
-        if window.lastRequestedSize != desired.size {
+        let originOnly = window.acceptedSize?.requested == desired.size && window.lastRequestedOrigin != nil
+        if window.acceptedSize?.requested != desired.size {
             if purpose == .restoreOriginal, abs(actual.width - desired.width) > 0.5 || abs(actual.height - desired.height) > 0.5 {
                 moveReadbacks.remove(id)
                 let safe = NativePlacement.safeToGrow(at: Box(actual), to: Box(desired), neighbors: neighbors)
@@ -504,7 +528,7 @@ final class NativeDesktop {
                 actual = measured
                 write.afterSize = measured
             }
-            window.lastRequestedSize = desired.size
+            window.acceptedSize = (desired.size, actual.size)
             window.lastRequestedOrigin = nil
         }
         guard let projected = NativePlacement.projection(for: Box(desired), measured: Box(actual), on: screen.bounds,
@@ -530,11 +554,15 @@ final class NativeDesktop {
                     write.afterPosition = measured
                 }
             }
-            window.lastRequestedOrigin = origin
         }
-        window.rect = actual
+        if purpose == .strip {
+            write.verified = window.acceptsPlacement(actual, at: desired, on: screen, neighbors: neighbors)
+        } else {
+            window.observeFrame(actual)
+            write.verified = placed(actual, at: desired, on: screen, purpose: purpose)
+        }
+        window.lastRequestedOrigin = origin
         entries[id] = window
-        write.verified = placed(actual, at: desired, on: screen, purpose: purpose)
         return write
     }
 
@@ -553,13 +581,15 @@ final class NativeDesktop {
             guard self.running, self.trusted else { return }
             for (id, target) in batch {
                 guard self.draggingID != id, !self.suspendedIDs.contains(id), !self.owned.contains(id),
-                      self.screens.contains(target.screen), let window = self.entries[id] else { continue }
+                      self.screens.contains(target.screen), var window = self.entries[id] else { continue }
                 let desired = target.frame.nativeRect
-                let measured = NativeAX.frame(window.element)
-                if let measured { self.entries[id]?.rect = measured }
-                if measured.map({ self.placed($0, at: desired, on: target.screen) }) != true {
-                    self.rejectPlacement(id, desired: desired, on: target.screen, write: NativeFrameWrite(position: .success))
+                if let measured = NativeAX.frame(window.element) {
+                    let accepted = window.acceptsPlacement(measured, at: desired, on: target.screen,
+                                                           neighbors: self.neighboringDisplays[target.screen.id] ?? [])
+                    self.entries[id] = window
+                    if accepted { continue }
                 }
+                self.rejectPlacement(id, desired: desired, on: target.screen, write: NativeFrameWrite(position: .success))
             }
         }
         readbackWork = work
@@ -570,9 +600,12 @@ final class NativeDesktop {
     // Flush a predicted frame before changing ownership or restoring original geometry.
     private func refreshPendingMove(_ id: String) {
         guard moveReadbacks.remove(id) != nil, trusted, let window = entries[id] else { return }
-        if let measured = NativeAX.frame(window.element) { entries[id]?.rect = measured }
+        if let measured = NativeAX.frame(window.element) {
+            entries[id]?.observeFrame(measured)
+        } else {
+            entries[id]?.acceptedSize = nil
+        }
         entries[id]?.lastRequestedOrigin = nil
-        entries[id]?.lastRequestedSize = nil
     }
 
     func raise(_ id: String, activate: Bool) {
@@ -679,7 +712,7 @@ final class NativeDesktop {
               let display = screens.first(where: { $0.id == original.screen }) ?? bestScreen(for: original.frame)
         else { return }
         originals.removeValue(forKey: id)
-        entries[id]?.lastRequestedSize = nil
+        entries[id]?.acceptedSize = nil
         entries[id]?.lastRequestedOrigin = nil
         writeFrame(original.frame, for: id, on: display, purpose: .restoreOriginal)
     }

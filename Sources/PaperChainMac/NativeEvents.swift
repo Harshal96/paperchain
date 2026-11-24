@@ -238,11 +238,7 @@ extension NativeDesktop {
     }
 
     func windowFrameChanged(_ actual: CGRect?, for id: String) {
-        if let actual, let window = entries[id], !window.rect.approximatelyEquals(actual) {
-            entries[id]?.rect = actual
-            entries[id]?.lastRequestedSize = nil
-            entries[id]?.lastRequestedOrigin = nil
-        }
+        if let actual { entries[id]?.observeFrame(actual) }
         // AX can repeat a move or resize notification while the mouse is held still.
         if let gesture, gesture.window == id {
             guard let actual, gesture.startFrame.approximatelyEquals(actual) else {
@@ -335,15 +331,17 @@ extension NativeDesktop {
                 return
             }
             guard let rect = NativeAX.frame(windowElement) else { return }
-            if let target = moveReadbacks.remove(id),
-               !NativePlacement.accepts(Box(rect), for: target.frame, on: target.screen.bounds,
-                                        neighbors: neighboringDisplays[target.screen.id] ?? []) {
-                entries[id]?.lastRequestedSize = nil
-                entries[id]?.lastRequestedOrigin = nil
-                skippedDuringGesture = true
+            if let target = moveReadbacks.remove(id) {
+                let accepted = entries[id]?.acceptsPlacement(rect, at: target.frame.nativeRect, on: target.screen,
+                                                            neighbors: neighboringDisplays[target.screen.id] ?? [])
+                if accepted == false {
+                    entries[id]?.lastRequestedOrigin = nil
+                    skippedDuringGesture = true
+                }
+            } else {
+                entries[id]?.observeFrame(rect)
             }
             if settlingPlacements.removeValue(forKey: id) != nil { skippedDuringGesture = true }
-            entries[id]?.rect = rect
             let plain = event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty
             let body = plain && event.clickCount <= 1 && isBody(hit)
             let sameApp = focusIsInSameApp(as: id, at: ProcessInfo.processInfo.systemUptime)
@@ -411,9 +409,8 @@ extension NativeDesktop {
             abs(candidate.origin.y - start.minY) <= 10
         if moved && frameMoved && !resizedFromLeft && !resizedFromTop {
             if focusObservation.awaitingFocus(id) { focusObservation.clicked(id) }
-            entries[id]?.rect = frame
+            entries[id]?.observeFrame(frame)
             entries[id]?.lastRequestedOrigin = nil
-            entries[id]?.lastRequestedSize = nil
             originals.removeValue(forKey: id)
             lastDrop = (Double(point.x), Double(point.y), detach)
             onEvent?(.dragged(id, Box(frame), horizontalMovement: Double(frame.minX - start.minX)))
