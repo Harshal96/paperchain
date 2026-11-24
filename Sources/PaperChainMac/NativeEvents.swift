@@ -345,8 +345,7 @@ extension NativeDesktop {
             entries[id]?.rect = rect
             let plain = event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty
             let body = plain && event.clickCount <= 1 && isBody(hit)
-            let sameApp = focusedID.flatMap { entries[$0]?.app.processIdentifier } == entries[id]?.app.processIdentifier &&
-                ProcessInfo.processInfo.systemUptime - lastAppActivation > NativeFocusObservation.suppressionInterval
+            let sameApp = focusIsInSameApp(as: id, at: ProcessInfo.processInfo.systemUptime)
             let closeButton = !body && NativeAX.element(windowElement, kAXCloseButtonAttribute)
                 .map { CFEqual($0, hit.element) } == true
             gesture = Gesture(window: id, origin: point, startFrame: rect, bodyClick: body, closeButton: closeButton,
@@ -421,15 +420,16 @@ extension NativeDesktop {
             let focused = NativeAX.element(AXUIElementCreateApplication(window.app.processIdentifier), kAXFocusedWindowAttribute)
             let matchesFocus = focused.map { CFEqual($0, window.element) } == true
             let active = window.app.isActive
-            let eligible = candidate.bodyClick && !moved && active && !owned.contains(id)
+            // The release can arrive before macOS activates the clicked application.
+            let eligible = candidate.bodyClick && !moved && !owned.contains(id)
             let releaseHit = eligible ? hit(at: point) : nil
             let sameBody = releaseHit.map { CFEqual($0.window, window.element) && isBody($0) } == true
             pointerLog.debug("Managed pointer up eligible=\(eligible, privacy: .public) sameBody=\(sameBody, privacy: .public) active=\(active, privacy: .public) nativeFocused=\(matchesFocus, privacy: .public)")
-            finishClick(candidate, sameBody: sameBody, nativeFocused: active && matchesFocus)
+            finishClick(candidate, sameBody: sameBody, nativeFocused: active && matchesFocus, moved: moved)
         }
     }
 
-    func finishClick(_ candidate: Gesture, sameBody: Bool, nativeFocused: Bool) {
+    func finishClick(_ candidate: Gesture, sameBody: Bool, nativeFocused: Bool, moved: Bool = false) {
         let id = candidate.window
         let keepsDimming = nativeFocused && dimmedAround == id
         let time = ProcessInfo.processInfo.systemUptime
@@ -438,14 +438,14 @@ extension NativeDesktop {
                                                  bodyWindow: sameBody && !keepsDimming ? id : nil,
                                                  nativeFocused: nativeFocused, at: time)
         deferredPointerFocus = false
+        let sameApp = candidate.sameApplication && time - lastAppActivation > NativeFocusObservation.suppressionInterval
         switch click {
         case .body:
-            let sameApp = candidate.sameApplication && time - lastAppActivation > NativeFocusObservation.suppressionInterval
             onEvent?(.bodyClicked(id, sameApplication: sameApp))
         case .focused where keepsDimming:
             checkExposureAfterActivation(id)
         case .focused:
-            onEvent?(.focused(id))
+            onEvent?(.focused(id, sameApplication: sameApp && !moved))
         case nil:
             resamplePointerFocus()
         }

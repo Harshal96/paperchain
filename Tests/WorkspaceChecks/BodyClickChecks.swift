@@ -18,6 +18,15 @@ func checkBodyClicks() {
     expect(!focus.observe("A", at: 2.01, suppressed: false, dragging: false, userInput: false) && focus.focusedID == "B",
            "an old focus notification overrode B before the manager raised anything")
 
+    var settled = focus
+    _ = settled.raise("A", activate: false, at: 2.1)
+    _ = settled.raise("B", activate: true, at: 2.2)
+    expect(!settled.observe("A", at: 2.3, suppressed: true, dragging: false, userInput: false),
+           "a focus notification from the passive raise must preserve B")
+    expect(!settled.observe("A", at: 3, suppressed: false, dragging: false, userInput: false) && settled.focusedID == "B",
+           "replaying the passive raise after suppression expires must preserve B")
+    expect(settled.observe("A", at: 3.1, suppressed: false, dragging: false, userInput: true),
+           "a genuine keyboard focus change must still select the previously raised window")
     var keyboard = focus
     expect(keyboard.observe("A", at: 2.02, suppressed: false, dragging: false, userInput: true) && keyboard.focusedID == "A",
            "a genuine keyboard focus change must supersede the accepted click")

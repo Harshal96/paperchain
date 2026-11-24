@@ -241,6 +241,12 @@ extension NativeDesktop {
         entries.first(where: { CFEqual($0.value.element, element) })?.key
     }
 
+    func focusIsInSameApp(as id: String, at time: Double) -> Bool {
+        guard let focusedID, let previous = entries[focusedID], let target = entries[id] else { return false }
+        return previous.app.processIdentifier == target.app.processIdentifier &&
+            time - lastAppActivation > NativeFocusObservation.suppressionInterval
+    }
+
     /// A true result means the focus observation is resolved from existing registrations.
     @discardableResult
     func reportFocus() -> Bool {
@@ -271,10 +277,11 @@ extension NativeDesktop {
             return true
         }
         let userKeyAfterRaise = inputBaseline > 0 && keyAge < now - inputBaseline
+        let sameApp = focusIsInSameApp(as: id, at: now)
         if focusObservation.observe(id, on: activeStripLocation?(id)?.screen, at: now, suppressed: now < suppressFocusUntil,
                                     dragging: draggingID != nil, userInput: userKeyAfterRaise) {
             if deferredActivation != id { deferredActivation = nil }
-            onEvent?(.focused(id))
+            onEvent?(.focused(id, sameApplication: sameApp))
         }
         return true
     }

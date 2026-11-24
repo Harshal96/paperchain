@@ -110,9 +110,9 @@ final class Runtime: NSObject, PaperActions {
         case .pointerDown:
             presentation.cancelActivation()
             dockFocus = DockFocusSelection()
-        case let .focused(id):
+        case let .focused(id, sameApplication):
             desktop.cancelExposureCheck()
-            presentation.observedFocus(id)
+            presentation.observedFocus(id, sameApplication: sameApplication)
             selectNativeWindow(id, activate: false)
             desktop.checkExposureAfterActivation(id)
         case let .bodyClicked(id, sameApplication):

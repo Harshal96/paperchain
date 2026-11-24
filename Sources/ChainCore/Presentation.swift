@@ -35,28 +35,33 @@ public struct Presentation {
     private var parked = Set<String>()
     private var foreground: [String: [String]] = [:]
     private var pendingActivation: String?
-    private var clickedForeground: String?
+    private var foregroundDuringScroll: String?
     private var unsettledScreens = Set<String>()
 
     public init() {}
 
     public mutating func cancelActivation() {
         pendingActivation = nil
-        clickedForeground = nil
+        foregroundDuringScroll = nil
     }
 
     /// A verified click lifts an already exposed window. Keep that window on top while the camera catches up.
     public mutating func clickedBody(_ id: String, sameApplication: Bool = false) {
         if !sameApplication { observedFocus(id) }
-        clickedForeground = id
+        foregroundDuringScroll = id
     }
 
     /// Focus belongs to the most recent user action, including a click on another monitor.
-    public mutating func observedFocus(_ id: String) {
+    public mutating func observedFocus(_ id: String, sameApplication: Bool = false) {
         if pendingActivation != id { pendingActivation = nil }
-        if clickedForeground != id { clickedForeground = nil }
-        // Activating another app can also raise its covered siblings above either edge.
-        if let screen = placements[id]?.screen { foreground.removeValue(forKey: screen) }
+        if foregroundDuringScroll != id { foregroundDuringScroll = nil }
+        guard let screen = placements[id]?.screen else { return }
+        // Native focus can arrive after mouse-up. Keep the exposed window that received it
+        // above the outgoing center while the strip moves.
+        let exposed = foreground[screen]?.contains(id) == true
+        if exposed { foregroundDuringScroll = id }
+        // Activating another app or a covered window can reorder the visible stack.
+        if !sameApplication || !exposed { foreground.removeValue(forKey: screen) }
     }
 
     public func isMoving(at time: Double) -> Bool {
@@ -185,7 +190,7 @@ public struct Presentation {
         owned = nextOwned
         if let activate {
             pendingActivation = activate
-            if clickedForeground != activate { clickedForeground = nil }
+            if foregroundDuringScroll != activate { foregroundDuringScroll = nil }
         }
         if let pendingActivation, !tracks.values.contains(where: { $0.selected == pendingActivation }) {
             cancelActivation()
@@ -226,9 +231,9 @@ public struct Presentation {
                 let edges = tiles.keys.filter { !centerRows.contains($0) }.sorted()
                 front[id] = edges + centerRows.filter { $0 != track.selected }
                 if let selected = track.selected, centerRows.contains(selected) { front[id]?.append(selected) }
-                if let clicked = clickedForeground, track.selected == clicked, tiles[clicked] != nil {
-                    front[id]?.removeAll { $0 == clicked }
-                    front[id]?.append(clicked)
+                if let focused = foregroundDuringScroll, track.selected == focused, tiles[focused] != nil {
+                    front[id]?.removeAll { $0 == focused }
+                    front[id]?.append(focused)
                 }
             }
         }
@@ -258,7 +263,7 @@ public struct Presentation {
         for (screen, windows) in front.sorted(by: { $0.key < $1.key }) {
             if force || changedLayers.contains(screen) || foreground[screen] != windows {
                 var raises = windows[...]
-                if !force, !changedLayers.contains(screen), let clicked = clickedForeground, windows.last == clicked,
+                if !force, !changedLayers.contains(screen), let focused = foregroundDuringScroll, windows.last == focused,
                    let old = foreground[screen] {
                     // Keep the longest prefix already layered in order above every outgoing tile.
                     // Raising only the remaining suffix avoids giving key focus back to a sibling.
@@ -275,7 +280,9 @@ public struct Presentation {
         if let id = pendingActivation, let placement = next[id], !movingScreens.contains(placement.screen) {
             commands.append(.raise(id, activate: true))
             pendingActivation = nil
-            clickedForeground = nil
+        }
+        if let focused = foregroundDuringScroll, let placement = next[focused], !movingScreens.contains(placement.screen) {
+            foregroundDuringScroll = nil
         }
         unsettledScreens = movingScreens
         edgeWindows = nextEdges
