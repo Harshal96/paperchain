@@ -30,11 +30,13 @@ public struct WindowInfo: Codable, Equatable, Identifiable {
     public let id: String
     public var app: String
     public var title: String
+    public var bundleID: String?
 
-    public init(id: String, app: String, title: String) {
+    public init(id: String, app: String, title: String, bundleID: String? = nil) {
         self.id = id
         self.app = app
         self.title = title
+        self.bundleID = bundleID
     }
 }
 

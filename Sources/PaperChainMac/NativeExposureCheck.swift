@@ -106,7 +106,7 @@ extension NativeDesktop {
         guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &element) == .success,
               let element else { return nil }
         let window = NativeAX.element(element, kAXWindowAttribute) ?? element
-        guard let id = id(of: window), let managed = entries[id], managed.app.processIdentifier == surface.pid else { return nil }
+        guard let id = managedID(of: window), let managed = entries[id], managed.app.processIdentifier == surface.pid else { return nil }
         if !CFEqual(element, window) {
             if let top = NativeAX.element(element, kAXTopLevelUIElementAttribute) {
                 guard CFEqual(top, window) else { return nil }

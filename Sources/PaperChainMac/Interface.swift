@@ -8,6 +8,7 @@ protocol PaperActions: AnyObject, ObservableObject {
     var workspace: Workspace { get }
     var windowPadding: Int { get }
     var dimSideWindows: Bool { get }
+    var floatingApps: [String: String] { get }
     var categories: [String] { get }
     var hasAPIKey: Bool { get }
     var decisionProvider: DecisionProvider { get }
@@ -25,6 +26,7 @@ protocol PaperActions: AnyObject, ObservableObject {
     func setEnabled(_ enabled: Bool, screen: String)
     func setWindowPadding(_ points: Int)
     func setDimSideWindows(_ enabled: Bool)
+    func setAppFloating(_ bundleID: String, name: String?)
     func setCategories(_ names: [String])
     func setDecisionProvider(_ provider: DecisionProvider)
     func setOllamaModel(_ model: String)

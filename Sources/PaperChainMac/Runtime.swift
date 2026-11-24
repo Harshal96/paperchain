@@ -8,9 +8,12 @@ final class Runtime: NSObject, PaperActions {
     static let shared = Runtime()
     static let defaults = ["Social Media", "Writing", "Work & Coding"]
     private static let windowPaddingKey = "appearance.windowPadding"
+    private static let floatingAppsKey = "windows.floatingApps"
     @Published private(set) var workspace = Workspace()
     @Published private(set) var availableWindowIDs = Set<String>()
     @Published private(set) var categories = defaults
+    @Published private(set) var floatingApps = UserDefaults.standard.dictionary(forKey: floatingAppsKey)
+        as? [String: String] ?? [:]
     @Published private var regroupSettings = RegroupSettings()
     var decisionProvider: DecisionProvider { regroupSettings.provider }
     var ollamaModel: String { regroupSettings.ollamaModel }
@@ -65,6 +68,7 @@ final class Runtime: NSObject, PaperActions {
                   screen.isConnected, screen.enabled, screen.activeGroupID == owner.groupID else { return nil }
             return (screen.id, self.presentation.isClipped(id))
         }
+        desktop.setFloatingAppBundleIDs(Set(floatingApps.keys))
         desktop.start()
         ingest(force: true, selectFrontmost: true)
     }
@@ -178,8 +182,11 @@ final class Runtime: NSObject, PaperActions {
             return (window, screen)
         }
         next.rescan(observations)
-        for id in next.windows.keys where !available.contains(id) && desktop.isProcessGone(for: id) {
-            next.close(id)
+        for window in next.windows.values where !available.contains(window.id) {
+            if desktop.isProcessGone(for: window.id) ||
+                (!next.detached.contains(window.id) && desktop.isFloatingWindow(window)) {
+                next.close(window.id)
+            }
         }
         let selected = selectWindow ?? (selectFrontmost ? desktop.focusedID : nil)
         if let id = selected, available.contains(id), let owner = next.location(of: id),
@@ -280,6 +287,17 @@ final class Runtime: NSObject, PaperActions {
         UserDefaults.standard.set(enabled, forKey: "appearance.dimSideWindows")
         desktop.dimSideWindows = enabled
     }
+    func setAppFloating(_ bundleID: String, name: String?) {
+        guard floatingApps[bundleID] != name else { return }
+        floatingApps[bundleID] = name
+        UserDefaults.standard.set(floatingApps, forKey: Self.floatingAppsKey)
+        desktop.setFloatingAppBundleIDs(Set(floatingApps.keys))
+        if running {
+            desktop.rescan()
+            ingest()
+        }
+    }
+
     private static let missingAccessMessage = "Grant Accessibility access in Settings."
     func rescan() {
         desktop.rescan()

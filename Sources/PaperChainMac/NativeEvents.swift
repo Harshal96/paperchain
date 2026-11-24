@@ -216,7 +216,7 @@ extension NativeDesktop {
             clearOwnership(id)
             userMinimized.remove(id)
             suspendedIDs.remove(id)
-            onEvent?(.restored(id))
+            if managedWindow(id) != nil { onEvent?(.restored(id)) }
             queueScan(for: appPID(of: element))
         case kAXWindowMovedNotification, kAXWindowResizedNotification:
             guard let id = id(of: element) else { return }
@@ -317,7 +317,7 @@ extension NativeDesktop {
         if event.type == .leftMouseDown {
             beginPointerPress(at: event.timestamp)
             let hit = hit(at: point)
-            let id = hit.flatMap { self.id(of: $0.window) }
+            let id = hit.flatMap { self.managedID(of: $0.window) }
             if let element = hit?.element, let role = NativeAX.attribute(element, kAXRoleAttribute) as? String,
                [kAXDockItemRole, kAXMenuBarItemRole, kAXMenuItemRole, kAXMenuRole].contains(role) {
                 // A Dock or Window menu item can intentionally activate a window on another monitor.
@@ -329,7 +329,8 @@ extension NativeDesktop {
             let windowElement = hit.window
             guard let id else {
                 // A direct click can be the first observation for apps that omit the create event.
-                if let pid = appPID(of: windowElement), NSRunningApplication(processIdentifier: pid)?.activationPolicy == .regular,
+                if let pid = appPID(of: windowElement), let app = NSRunningApplication(processIdentifier: pid),
+                   app.activationPolicy == .regular, !isFloatingApp(app.bundleIdentifier),
                    NativeAX.applicability(windowElement) == true { queueScan(for: pid) }
                 return
             }
@@ -388,7 +389,7 @@ extension NativeDesktop {
             }
         }
         let id = candidate.window
-        guard let window = entries[id] else { return }
+        guard let window = managedWindow(id) else { return }
         if candidate.closeButton {
             // Closing a background window need not change focus. Some apps omit or delay
             // the destroy notification, so reconcile just this app after the button fires.

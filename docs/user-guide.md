@@ -26,6 +26,12 @@ Click a group to return to its windows. PaperChain minimizes windows in inactive
 | Float a window | Option-drag its title bar, or Control-click its dock icon and choose **Detach window**. Dragging it to a disabled display also takes it out of the strip. |
 | Bring a detached window back | Open the destination group, click **Group and dock options** (the circled ellipsis), and choose the window under **Attach window**. |
 
+## Keep an app floating
+
+To keep all windows from an app such as Fellow outside PaperChain’s groups, open **Settings… → Floating apps**, click **Add Application…**, and choose the app. You can add an app while it’s closed. The setting applies across all displays and stays saved when you quit PaperChain.
+
+Click **Remove** next to an app to let PaperChain manage its windows again.
+
 ## Adjust your displays
 
 Open **Settings…** from PaperChain’s linked-paper icon in the menu bar.

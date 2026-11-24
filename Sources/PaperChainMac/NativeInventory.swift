@@ -21,8 +21,14 @@ extension NativeDesktop {
         var restored: [String] = []
         var discovered: [String] = []
         let requested = appPIDs.map { $0.compactMap(NSRunningApplication.init(processIdentifier:)) }
-        let apps = (requested ?? NSWorkspace.shared.runningApplications).filter {
-            $0.activationPolicy == .regular && !$0.isTerminated && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        // Excluded apps still need their native inventory while recovering a previously
+        // managed window. Read siblings too so journal matching can detect ambiguity.
+        let retainedPIDs: Set<pid_t> = floatingAppBundleIDs.isEmpty ? [] :
+            Set(journal.records.map(\.pid)).union(entries.values.map { $0.app.processIdentifier })
+        let apps = (requested ?? NSWorkspace.shared.runningApplications).filter { app in
+            guard !app.isTerminated, app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return false }
+            if isFloatingApp(app.bundleIdentifier) { return retainedPIDs.contains(app.processIdentifier) }
+            return app.activationPolicy == .regular
         }
         let pids = Set(apps.map(\.processIdentifier))
         let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -92,7 +98,8 @@ extension NativeDesktop {
                     }
                 }
                 guard let id else { continue }
-                let info = WindowInfo(id: id, app: app.localizedName ?? app.bundleIdentifier ?? "Application", title: seed.title)
+                let info = WindowInfo(id: id, app: app.localizedName ?? app.bundleIdentifier ?? "Application",
+                                      title: seed.title, bundleID: app.bundleIdentifier)
                 var entry = Window(info: info, app: app, element: seed.element, identifier: identifier,
                                    axIdentifier: rawKey, quartzIdentifier: quartzKey,
                                    rect: seed.frame, lastRequestedSize: previous?.lastRequestedSize,
@@ -109,7 +116,7 @@ extension NativeDesktop {
                 if previous == nil {
                     observeWindowDestruction(seed.element, for: pid)
                     scanOrder.append(id)
-                    if completedInitialInventory { discovered.append(id) }
+                    if completedInitialInventory && !isFloatingApp(info.bundleID) { discovered.append(id) }
                 }
                 entries[id] = entry
                 visible.insert(id)
@@ -165,8 +172,9 @@ extension NativeDesktop {
         let observationTime = ProcessInfo.processInfo.systemUptime
         for id in discovered { focusObservation.discovered(id, at: observationTime) }
         recoverParked(among: visible.compactMap { entries[$0] }, for: appPIDs)
+        releaseFloatingWindows(retrying: suspendedBefore)
         for id in closed { onEvent?(.closed(id)) }
-        for id in restored where !suspendedIDs.contains(id) { onEvent?(.restored(id)) }
+        for id in restored where !suspendedIDs.contains(id) && managedWindow(id) != nil { onEvent?(.restored(id)) }
         if before != windows || suspendedBefore != suspendedIDs { onEvent?(.windowsChanged) }
         reportFocus()
         completedInitialInventory = true
@@ -204,6 +212,7 @@ extension NativeDesktop {
                 try? journal.forget(saved.id)
                 continue
             }
+            if isFloatingApp(w.info.bundleID), w.app.isHidden { continue }
             owned.insert(match.id)
             recoveryJournalIDs[match.id] = saved.id
             userMinimized.remove(match.id)
@@ -247,13 +256,19 @@ extension NativeDesktop {
             time - lastAppActivation > NativeFocusObservation.suppressionInterval
     }
 
+    func managedID(of element: AXUIElement) -> String? {
+        guard let id = id(of: element), managedWindow(id) != nil else { return nil }
+        return id
+    }
+
     /// A true result means the focus observation is resolved from existing registrations.
     @discardableResult
     func reportFocus() -> Bool {
         // Even a suppressed AX focus event can change which native window is bright.
         defer { scheduleSideDimming() }
         guard trusted, let app = NSWorkspace.shared.frontmostApplication,
-              app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return true }
+              app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              !isFloatingApp(app.bundleIdentifier) else { return true }
         let pid = app.processIdentifier
         let application = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(application, 0.18)
