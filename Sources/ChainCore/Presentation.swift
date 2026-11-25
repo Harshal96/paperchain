@@ -58,7 +58,7 @@ public struct Presentation {
         guard let screen = placements[id]?.screen else { return }
         // Native focus can arrive after mouse-up. Keep the exposed window that received it
         // above the outgoing center while the strip moves.
-        let exposed = foreground[screen]?.contains(id) == true
+        let exposed = edgeWindows.contains(id) || foreground[screen]?.contains(id) == true
         if exposed { foregroundDuringScroll = id }
         // Activating another app or a covered window can reorder the visible stack.
         if !sameApplication || !exposed { foreground.removeValue(forKey: screen) }
@@ -195,7 +195,7 @@ public struct Presentation {
         if let pendingActivation, !tracks.values.contains(where: { $0.selected == pendingActivation }) {
             cancelActivation()
         }
-        commands += render(at: time, background: background, force: force)
+        commands += render(at: time, background: background, force: force, windows: workspace.windows)
         return commands
     }
 
@@ -204,7 +204,8 @@ public struct Presentation {
         return render(at: time, background: [:], force: false)
     }
 
-    private mutating func render(at time: Double, background: [String: Placement], force: Bool) -> [WindowCommand] {
+    private mutating func render(at time: Double, background: [String: Placement], force: Bool,
+                                 windows: [String: WindowInfo] = [:]) -> [WindowCommand] {
         var next: [String: Placement] = [:]
         var front: [String: [String]] = [:]
         var movingScreens = Set<String>()
@@ -226,9 +227,19 @@ public struct Presentation {
                 let nearest = abs(Double(track.selectedColumn) - center) <= 0.500001
                     ? track.selectedColumn : min(track.columns.count - 1, max(0, Int(center.rounded())))
                 let centerRows = track.columns[nearest]
-                // Raise both edge stacks over any covered native windows, then the
-                // central stack over those edges. Limit the work to the exposed tiles.
-                let edges = tiles.keys.filter { !centerRows.contains($0) }.sorted()
+                let layers: [String]
+                if movingScreens.contains(id), let selected = track.selected, tiles[selected] != nil,
+                   track.selectedColumn == 0 || track.selectedColumn == track.columns.count - 1,
+                   !background.contains(where: { $0.value.screen == id && tiles[$0.key] == nil }),
+                   foreground[id] != nil || !hasCoveredSibling(of: selected, in: track, tiles: tiles, windows: windows) {
+                    // The departing preview may be tucked under the middle window at a display seam.
+                    // Move it with the strip, but only raise the two columns sliding into place.
+                    let pair = track.selectedColumn == 0 ? track.columns.prefix(2) : track.columns.suffix(2)
+                    layers = pair.flatMap { $0 }.filter { tiles[$0] != nil }
+                } else {
+                    layers = Array(tiles.keys)
+                }
+                let edges = layers.filter { !centerRows.contains($0) }.sorted()
                 front[id] = edges + centerRows.filter { $0 != track.selected }
                 if let selected = track.selected, centerRows.contains(selected) { front[id]?.append(selected) }
                 if let focused = foregroundDuringScroll, track.selected == focused, tiles[focused] != nil {
@@ -288,5 +299,16 @@ public struct Presentation {
         edgeWindows = nextEdges
         foreground = front
         return commands
+    }
+
+    // App activation can also lift a covered sibling over the departing preview.
+    // Rebuild all exposed layers once when the previous native order is unknown.
+    private func hasCoveredSibling(of id: String, in track: Track, tiles: [String: Box], windows: [String: WindowInfo]) -> Bool {
+        guard let selected = windows[id] else { return false }
+        let app = selected.bundleID ?? selected.app
+        return track.columns.joined().contains { peer in
+            guard tiles[peer] == nil, let window = windows[peer] else { return false }
+            return (window.bundleID ?? window.app) == app
+        }
     }
 }
