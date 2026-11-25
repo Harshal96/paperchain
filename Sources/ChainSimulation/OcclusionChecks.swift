@@ -3,6 +3,8 @@ import ChainCore
 func runOcclusionChecks() {
     checkDisplayConnectionAtRest()
     checkDepartingEdge()
+    checkEndpointSlide()
+    checkEndpointAppActivation()
     checkClickedNeighborDuringMotion()
     checkNativeExposure()
     let screen = ScreenInfo(id: "strip", name: "Strip", bounds: Box(x: -1000, y: 0, width: 1000, height: 600))
@@ -129,6 +131,98 @@ private func checkDepartingEdge() {
     precondition(!jumped.contains(.park("A")))
     precondition(select("B", at: 2).contains(.place("A", raw, "display")),
                  "The returning neighbor must move from its staging position back to the strip")
+}
+
+private func checkEndpointSlide() {
+    let screen = ScreenInfo(id: "strip", name: "Strip", bounds: Box(x: 0, y: 0, width: 1000, height: 600))
+    for endpoint in ["C", "A"] {
+        let toLast = endpoint == "C"
+        // The far preview sits tucked under the middle window at a shared display edge.
+        let neighbor = ScreenInfo(id: "other", name: "Other",
+                                  bounds: Box(x: toLast ? -1000 : 1000, y: 0, width: 1000, height: 600))
+        let departing = toLast ? "A" : "C"
+        let available: Set<String> = ["A", "B", "C"]
+        var workspace = Workspace()
+        workspace.syncScreens([screen, neighbor])
+        for id in ["A", "B", "C"] {
+            workspace.discover(WindowInfo(id: id, app: id, title: id, bundleID: "app.\(id)"), on: screen.id)
+            workspace.select(id)
+        }
+        workspace.select("B")
+        var view = Presentation()
+        var desk = VirtualDesktop()
+        desk.consume(view.update(workspace, available: available, at: 0), screens: workspace.screens)
+        desk.consume([.raise(endpoint, activate: true)], screens: workspace.screens)
+        if toLast { view.clickedBody(endpoint) } else { view.observedFocus(endpoint) }
+        workspace.select(endpoint)
+
+        func apply(_ commands: [WindowCommand]) {
+            for command in commands {
+                // AX writes are individually visible, including the raises within a single tick.
+                desk.consume([command], screens: workspace.screens)
+                let overMiddle = desk.exposed(in: screen.bounds, within: [desk.frames["B"]!])
+                precondition(!overMiddle.contains(departing),
+                             "Window \(departing) flashed over the middle window on the slide to \(endpoint) after \(command)")
+            }
+        }
+        apply(view.update(workspace, available: available, at: 1, activate: toLast ? endpoint : nil))
+        var intermediate = false
+        for frame in 1...36 {
+            apply(view.tick(at: 1 + Double(frame) / 120))
+            let middleX = desk.frames["B"]!.x
+            intermediate = intermediate || (toLast ? 0 < middleX && middleX < 252 : 252 < middleX && middleX < 504)
+            precondition(abs(desk.frames[endpoint]!.x - middleX) == 504,
+                         "The endpoint and its neighbor must slide together at the padded column spacing")
+            if frame == 14 && toLast {
+                // Refocus the still-exposed departing preview during the slide.
+                var reversed = view
+                var model = workspace
+                var surface = desk
+                surface.consume([.raise(departing, activate: true)], screens: model.screens)
+                reversed.observedFocus(departing)
+                model.select(departing)
+                surface.consume(reversed.update(model, available: available, at: 1 + Double(frame) / 120), screens: model.screens)
+                precondition(surface.layers.last == departing, "The reversal covered the preview that received native focus")
+            }
+        }
+        precondition(intermediate && desk.frames["B"]!.x == (toLast ? 0 : 504))
+        precondition(desk.frames[endpoint]!.x == (toLast ? 504 : 0) && desk.focused == endpoint)
+        precondition(desk.exposes(["B", endpoint], in: screen.bounds))
+    }
+}
+
+private func checkEndpointAppActivation() {
+    let screen = ScreenInfo(id: "strip", name: "Strip", bounds: Box(x: 0, y: 0, width: 1000, height: 600))
+    let neighbor = ScreenInfo(id: "other", name: "Other", bounds: Box(x: -1000, y: 0, width: 1000, height: 600))
+    let ids = ["W", "A", "B", "C"]
+    var workspace = Workspace()
+    workspace.syncScreens([screen, neighbor])
+    for id in ids {
+        let app = id == "W" ? "C" : id
+        workspace.discover(WindowInfo(id: id, app: app, title: id, bundleID: "app.\(app)"), on: screen.id)
+        workspace.select(id)
+    }
+    workspace.select("B")
+    var view = Presentation()
+    var desk = VirtualDesktop()
+    desk.consume(view.update(workspace, available: Set(ids), at: 0), screens: workspace.screens)
+
+    // Activating C can lift its previously covered sibling W in front of the preview A.
+    desk.consume([.raise("W", activate: false), .raise("C", activate: true)], screens: workspace.screens)
+    view.observedFocus("C")
+    workspace.select("C")
+    func check(_ commands: [WindowCommand]) {
+        desk.consume(commands, screens: workspace.screens)
+        let endpointOffset = Strip.offset(column: ids.count - 1, count: ids.count, width: screen.bounds.width)
+        let camera = endpointOffset - desk.requestedFrames["B"]!.x
+        let tiles = Strip.frames(columns: ids.map { [$0] }, bounds: screen.bounds, offset: camera)
+        for (id, tile) in tiles {
+            let visible = desk.exposed(in: screen.bounds, within: [tile])
+            precondition(visible == [id], "Endpoint app activation exposed \(visible) inside \(id)'s tile")
+        }
+    }
+    check(view.update(workspace, available: Set(ids), at: 1))
+    for frame in 1...36 { check(view.tick(at: 1 + Double(frame) / 120)) }
 }
 
 private func checkNativeExposure() {
