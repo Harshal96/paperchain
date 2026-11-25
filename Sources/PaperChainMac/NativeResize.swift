@@ -43,7 +43,7 @@ extension NativeDesktop {
         }
         let measured = NativeAX.frame(window.element)
         if request.lastGeometryWrite != nil, request.firstSample == nil { request.firstSample = measured }
-        if let measured { entries[id]?.rect = measured }
+        if let measured { entries[id]?.observeFrame(measured) }
 
         let action = sequence.next(measured: measured.map(Box.init), target: Box(desired), display: screen.bounds,
                                    neighbors: neighboringDisplays[screen.id] ?? [], sizeWritable: request.sizeWritable)
@@ -77,7 +77,7 @@ extension NativeDesktop {
             return
         case .settled:
             guard let measured else { return }
-            entries[id]?.lastRequestedSize = desired.size
+            entries[id]?.acceptedSize = (desired.size, measured.size)
             entries[id]?.lastRequestedOrigin = measured.origin
             settlingPlacements.removeValue(forKey: id)
             DispatchQueue.main.async { [weak self] in

@@ -139,8 +139,21 @@ func runColdResizeChecks() {
     precondition(oversized.next(measured: overWide, target: target, display: screen, neighbors: neighbors) == .resize,
                  "shrinking an oversized source can remove an existing neighboring overlap")
 
-    // Terminal-style resize increments may leave a repeatable residual after two
-    // isolated writes. Varying responses or a dimension stuck at its old size fail.
+    // A near-target size may already be the closest the app can produce. Keep
+    // the allowance bounded when neither resize changes the measured dimension.
+    for (shortfall, expected) in [(4.0, NativeResizeSequence.Action.settled), (5.0, .refused)] {
+        var actual = target
+        actual.height -= shortfall
+        var sequence = NativeResizeSequence()
+        var outcome = NativeResizeSequence.Action.wait
+        for _ in 0..<16 {
+            outcome = sequence.next(measured: actual, target: target, display: screen, neighbors: neighbors)
+            if outcome == .settled || outcome == .refused { break }
+        }
+        precondition(outcome == expected, "unchanged sizes beyond the rounding allowance still require progress")
+    }
+
+    // Two consistent writes can confirm a larger cell-size increment when the app makes progress.
     let rounded = Box(x: 0, y: 34, width: 848, height: 1068)
     let partlyStuck = Box(x: 0, y: 34, width: 848, height: 422)
     let unstable = Box(x: 0, y: 34, width: 841, height: 1056)
